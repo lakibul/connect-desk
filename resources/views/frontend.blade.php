@@ -4,205 +4,459 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>ConnectDesk - Chat Integration</title>
+    <title>ConnectDesk - Professional Chat Integration Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="{{ asset('css/frontend.css') }}" rel="stylesheet">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <style>
-        .chat-widget {
-            position: fixed;
-            bottom: 80px;
-            right: 20px;
-            width: 350px;
-            height: 500px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.15);
-            display: none;
-            flex-direction: column;
-            z-index: 1000;
-        }
-        .chat-widget.active {
-            display: flex;
-        }
-        .chat-buttons {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            display: flex;
-            gap: 10px;
-            z-index: 999;
-        }
-        .chat-btn {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: transform 0.2s;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-        }
-        .chat-btn:hover {
-            transform: scale(1.1);
-        }
-        .whatsapp-btn {
-            background: #25D366;
-        }
-        .facebook-btn {
-            background: #0084FF;
-        }
-        .chat-header {
-            padding: 15px;
-            border-radius: 12px 12px 0 0;
-            color: white;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .whatsapp-header {
-            background: #25D366;
-        }
-        .facebook-header {
-            background: #0084FF;
-        }
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-            background: #f5f5f5;
-        }
-        .message {
-            margin-bottom: 10px;
-            padding: 10px 15px;
-            border-radius: 18px;
-            max-width: 70%;
-            word-wrap: break-word;
-        }
-        .message.visitor {
-            background: white;
-            margin-right: auto;
-        }
-        .message.admin {
-            background: #dcf8c6;
-            margin-left: auto;
-        }
-        .chat-input {
-            padding: 15px;
-            border-top: 1px solid #e0e0e0;
-            display: flex;
-            gap: 10px;
-        }
-        .chat-input input {
-            flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 20px;
-            outline: none;
-        }
-        .chat-input button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 20px;
-            background: #25D366;
-            color: white;
-            cursor: pointer;
-        }
-        .facebook-input button {
-            background: #0084FF;
-        }
-    </style>
 </head>
-<body class="bg-gray-50">
+<body>
     <!-- Navigation -->
-    <nav class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center">
-                    <h1 class="text-2xl font-bold text-gray-800">ConnectDesk</h1>
+    <nav class="navbar">
+        <div class="nav-content">
+            <a href="#" class="logo">
+                <i class="bi bi-chat-dots-fill"></i>
+                ConnectDesk
+            </a>
+            <div class="nav-links">
+
+                @if (Route::has('login'))
+                    @auth
+                        @if(auth()->user()->role === 'admin')
+                            <a href="{{ route('admin.dashboard') }}" class="nav-link">Admin Dashboard</a>
+                        @endif
+                        <a href="{{ route('dashboard') }}" class="nav-link">Dashboard</a>
+                    @else
+                        <a href="{{ route('login') }}" class="nav-link">Laravel Auth</a>
+                    @endauth
+                @endif
+
+                <!-- Guest Actions -->
+                <div id="guest-auth-section" class="guest-auth-section">
+                    <button onclick="showModal()" class="btn-primary">Login / Register</button>
                 </div>
-                <div class="flex items-center gap-4">
-                    @if (Route::has('login'))
-                        @auth
-                            @if(auth()->user()->role === 'admin')
-                                <a href="{{ route('admin.dashboard') }}" class="text-gray-700 hover:text-gray-900">Admin Dashboard</a>
-                            @endif
-                            <a href="{{ route('dashboard') }}" class="text-gray-700 hover:text-gray-900">Dashboard</a>
-                        @else
-                            <a href="{{ route('login') }}" class="text-gray-700 hover:text-gray-900 font-medium">Login</a>
-                        @endauth
-                    @endif
+
+                <!-- User Authentication Status -->
+                <div id="user-auth-section" class="user-auth-section" style="display: none;">
+                    <div class="user-info">
+                        <div class="user-avatar">
+                            <i class="bi bi-person-circle"></i>
+                        </div>
+                        <div class="user-details">
+                            <span id="user-name" class="user-name"></span>
+                            <span id="user-email" class="user-email"></span>
+                        </div>
+                        <div class="user-actions">
+                            <button onclick="toggleUserMenu()" class="user-menu-btn">
+                                <i class="bi bi-chevron-down"></i>
+                            </button>
+                            <div id="user-menu" class="user-menu" style="display: none;">
+                                <div class="user-menu-header">
+                                    <div class="user-menu-name" id="menu-user-name"></div>
+                                    <div class="user-menu-email" id="menu-user-email"></div>
+                                    <div class="user-menu-phone" id="menu-user-phone"></div>
+                                </div>
+                                <div class="user-menu-divider"></div>
+                                <button onclick="testWhatsApp()" class="user-menu-item">
+                                    <i class="bi bi-whatsapp"></i>
+                                    Test WhatsApp Integration
+                                </button>
+                                <button onclick="logoutUser()" class="user-menu-item logout-btn">
+                                    <i class="bi bi-box-arrow-right"></i>
+                                    Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </nav>
 
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-        <div class="text-center">
-            <h2 class="text-4xl font-bold text-gray-900 mb-4">Welcome to ConnectDesk</h2>
-            <p class="text-xl text-gray-600 mb-8">Connect with us via WhatsApp or Facebook Messenger</p>
-            <div class="bg-white rounded-lg shadow p-8 max-w-2xl mx-auto">
-                <h3 class="text-2xl font-semibold mb-4">How can we help you?</h3>
-                <p class="text-gray-600">Click on the chat buttons in the bottom right corner to start a conversation with our team.</p>
+    <!-- Hero Section -->
+    <section class="hero-gradient">
+        <div class="hero-pattern"></div>
+        <div class="hero-content">
+            <div class="hero-text">
+                <h1 class="hero-title">Connect Seamlessly with Your Customers</h1>
+                <p class="hero-subtitle">
+                    Professional chat integration platform that brings WhatsApp and Facebook Messenger
+                    conversations directly to your business workflow
+                </p>
+            </div>
+
+            <div class="hero-features">
+                <div class="feature-card">
+                    <div class="feature-icon whatsapp-icon">
+                        <i class="bi bi-whatsapp"></i>
+                    </div>
+                    <h3 class="feature-title">WhatsApp Integration</h3>
+                    <p class="feature-description">
+                        Connect with customers through WhatsApp Business API. Manage conversations,
+                        send multimedia messages, and provide instant customer support.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon facebook-icon">
+                        <i class="bi bi-facebook"></i>
+                    </div>
+                    <h3 class="feature-title">Facebook Messenger</h3>
+                    <p class="feature-description">
+                        Integrate Facebook Messenger to reach customers on their preferred platform.
+                        Seamless conversations with rich media support and automated responses.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon integration-icon">
+                        <i class="bi bi-gear-fill"></i>
+                    </div>
+                    <h3 class="feature-title">Unified Dashboard</h3>
+                    <p class="feature-description">
+                        Manage all your conversations from one powerful dashboard. Track metrics,
+                        assign agents, and deliver exceptional customer experiences.
+                    </p>
+                </div>
             </div>
         </div>
-    </main>
+    </section>
 
-    <!-- Chat Buttons -->
-    <div class="chat-buttons">
-        <div class="chat-btn whatsapp-btn" onclick="toggleChat('whatsapp')">
-            <svg width="30" height="30" fill="white" viewBox="0 0 24 24">
-                <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.274.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.1.824zm-3.423-14.416c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm.029 18.88c-1.161 0-2.305-.292-3.318-.844l-3.677.964.984-3.595c-.607-1.052-.927-2.246-.926-3.468.001-3.825 3.113-6.937 6.937-6.937 1.856.001 3.598.723 4.907 2.034 1.31 1.311 2.031 3.054 2.03 4.908-.001 3.825-3.113 6.938-6.937 6.938z"/>
-            </svg>
+    <!-- Floating Chat Buttons -->
+    <div class="chat-floating-buttons">
+        <div class="chat-trigger whatsapp-trigger" onclick="toggleChat('whatsapp')">
+            <i class="bi bi-whatsapp"></i>
+            <div class="chat-tooltip">Chat via WhatsApp</div>
         </div>
-        <div class="chat-btn facebook-btn" onclick="toggleChat('facebook')">
-            <svg width="30" height="30" fill="white" viewBox="0 0 24 24">
-                <path d="M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10-10-4.486-10-10 4.486-10 10-10zm0-2c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm0 7.082c1.602 0 1.792.006 2.425.035 1.627.074 2.385.845 2.46 2.459.028.633.034.822.034 2.424s-.006 1.792-.034 2.424c-.075 1.613-.832 2.386-2.46 2.46-.633.028-.822.035-2.425.035-1.602 0-1.792-.006-2.424-.035-1.63-.075-2.385-.849-2.46-2.46-.028-.632-.035-.822-.035-2.424s.007-1.792.035-2.424c.074-1.615.832-2.386 2.46-2.46.632-.029.822-.034 2.424-.034zm0-1.082c-1.63 0-1.833.007-2.474.037-2.18.1-3.39 1.309-3.49 3.489-.029.641-.036.845-.036 2.474 0 1.63.007 1.834.036 2.474.1 2.179 1.31 3.39 3.49 3.49.641.029.844.036 2.474.036 1.63 0 1.834-.007 2.475-.036 2.176-.1 3.391-1.309 3.489-3.49.029-.64.036-.844.036-2.474 0-1.629-.007-1.833-.036-2.474-.098-2.177-1.309-3.39-3.489-3.489-.641-.03-.845-.037-2.475-.037zm0 2.919c-1.701 0-3.081 1.379-3.081 3.081s1.38 3.081 3.081 3.081 3.081-1.379 3.081-3.081c0-1.701-1.38-3.081-3.081-3.081zm0 5.081c-1.105 0-2-.895-2-2 0-1.104.895-2 2-2 1.104 0 2.001.895 2.001 2s-.897 2-2.001 2zm3.202-5.922c-.397 0-.72.322-.72.72 0 .397.322.72.72.72.398 0 .721-.322.721-.72 0-.398-.322-.72-.721-.72z"/>
-            </svg>
+        <div class="chat-trigger facebook-trigger" onclick="toggleChat('facebook')">
+            <i class="bi bi-messenger"></i>
+            <div class="chat-tooltip">Chat via Messenger</div>
+        </div>
+    </div>
+
+    <!-- User Registration Modal -->
+    <div id="registration-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Register to Send Message</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="registration-form" style="display: block;">
+                    <p>Please register to send messages through our chat platform:</p>
+                    <form id="registerForm">
+                        <div class="form-group">
+                            <label for="reg-name">Full Name *</label>
+                            <input type="text" id="reg-name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-email">Email Address *</label>
+                            <input type="email" id="reg-email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-phone">Phone Number *</label>
+                            <input type="tel" id="reg-phone" name="phone_number" placeholder="+8801XXXXXXXXX" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-password">Password *</label>
+                            <input type="password" id="reg-password" name="password" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-password-confirm">Confirm Password *</label>
+                            <input type="password" id="reg-password-confirm" name="password_confirmation" required>
+                        </div>
+                        <button type="submit" class="btn-primary" style="width: 100%;">Register</button>
+                    </form>
+                    <div class="form-footer">
+                        <p>Already have an account? <a href="#" onclick="showLogin()">Login here</a></p>
+                    </div>
+                </div>
+
+                <div id="login-form" style="display: none;">
+                    <p>Login to continue chatting:</p>
+                    <form id="loginForm">
+                        <div class="form-group">
+                            <label for="login-email">Email Address *</label>
+                            <input type="email" id="login-email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="login-password">Password *</label>
+                            <input type="password" id="login-password" name="password" required>
+                        </div>
+                        <button type="submit" class="btn-primary" style="width: 100%;">Login</button>
+                    </form>
+                    <div class="form-footer">
+                        <p>Don't have an account? <a href="#" onclick="showRegistration()">Register here</a></p>
+                    </div>
+                </div>
+
+                <div id="form-loading" style="display: none; text-align: center; padding: 2rem;">
+                    <div class="loading-spinner"></div>
+                    <p>Processing...</p>
+                </div>
+
+                <div id="form-error" class="error-message" style="display: none;"></div>
+            </div>
         </div>
     </div>
 
     <!-- WhatsApp Chat Widget -->
     <div id="whatsapp-widget" class="chat-widget">
         <div class="chat-header whatsapp-header">
-            <span class="font-semibold">WhatsApp Chat</span>
-            <button onclick="closeChat('whatsapp')" class="text-white text-xl">&times;</button>
+            <div class="chat-header-info">
+                <div class="chat-avatar">
+                    <i class="bi bi-whatsapp"></i>
+                </div>
+                <div class="chat-info">
+                    <div class="chat-title">WhatsApp Support</div>
+                    <div class="chat-status">Typically replies instantly</div>
+                </div>
+            </div>
+            <button class="chat-close" onclick="closeChat('whatsapp')">
+                <i class="bi bi-x"></i>
+            </button>
         </div>
-        <div id="whatsapp-messages" class="chat-messages"></div>
-        <div class="chat-input">
-            <input type="text" id="whatsapp-input" placeholder="Type a message..." onkeypress="handleKeyPress(event, 'whatsapp')">
-            <button onclick="sendMessage('whatsapp')">Send</button>
+        <div id="whatsapp-messages" class="chat-messages">
+            <div class="welcome-message">
+                <div class="welcome-title">👋 Hi there!</div>
+                <div class="welcome-text">Welcome to ConnectDesk. How can we help you today?</div>
+            </div>
+        </div>
+        <div class="chat-input-container">
+            <div class="chat-input-wrapper">
+                <textarea
+                    id="whatsapp-input"
+                    class="chat-input"
+                    placeholder="Type a message..."
+                    rows="1"
+                    onkeypress="handleKeyPress(event, 'whatsapp')"
+                    oninput="autoResize(this); toggleSendButton('whatsapp')"></textarea>
+                <button id="whatsapp-send" class="chat-send-btn" onclick="sendMessage('whatsapp')">
+                    <i class="bi bi-send-fill"></i>
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Facebook Chat Widget -->
     <div id="facebook-widget" class="chat-widget">
         <div class="chat-header facebook-header">
-            <span class="font-semibold">Messenger</span>
-            <button onclick="closeChat('facebook')" class="text-white text-xl">&times;</button>
+            <div class="chat-header-info">
+                <div class="chat-avatar">
+                    <i class="bi bi-messenger"></i>
+                </div>
+                <div class="chat-info">
+                    <div class="chat-title">Messenger Support</div>
+                    <div class="chat-status">We're here to help</div>
+                </div>
+            </div>
+            <button class="chat-close" onclick="closeChat('facebook')">
+                <i class="bi bi-x"></i>
+            </button>
         </div>
-        <div id="facebook-messages" class="chat-messages"></div>
-        <div class="chat-input facebook-input">
-            <input type="text" id="facebook-input" placeholder="Type a message..." onkeypress="handleKeyPress(event, 'facebook')">
-            <button onclick="sendMessage('facebook')">Send</button>
+        <div id="facebook-messages" class="chat-messages">
+            <div class="welcome-message">
+                <div class="welcome-title">🚀 Hello!</div>
+                <div class="welcome-text">Thanks for reaching out via Messenger. What can we assist you with?</div>
+            </div>
+        </div>
+        <div class="chat-input-container">
+            <div class="chat-input-wrapper">
+                <textarea
+                    id="facebook-input"
+                    class="chat-input"
+                    placeholder="Type a message..."
+                    rows="1"
+                    onkeypress="handleKeyPress(event, 'facebook')"
+                    oninput="autoResize(this); toggleSendButton('facebook')"></textarea>
+                <button id="facebook-send" class="chat-send-btn" onclick="sendMessage('facebook')">
+                    <i class="bi bi-send-fill"></i>
+                </button>
+            </div>
         </div>
     </div>
 
     <script>
-        let visitorId = localStorage.getItem('visitor_id') || null;
+        // Application State
+        let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
         let currentPlatform = null;
+        let messagesCache = {};
 
+        // Initialize user interface
+        function initializeUserInterface() {
+            if (currentUser) {
+                showUserAuthenticated();
+            } else {
+                showGuestInterface();
+            }
+        }
+
+        function showUserAuthenticated() {
+            document.getElementById('user-auth-section').style.display = 'flex';
+            document.getElementById('guest-auth-section').style.display = 'none';
+
+            // Update user display
+            document.getElementById('user-name').textContent = currentUser.name;
+            document.getElementById('user-email').textContent = currentUser.email;
+            document.getElementById('menu-user-name').textContent = currentUser.name;
+            document.getElementById('menu-user-email').textContent = currentUser.email;
+            document.getElementById('menu-user-phone').textContent = currentUser.phone_number || 'No phone';
+        }
+
+        function showGuestInterface() {
+            document.getElementById('user-auth-section').style.display = 'none';
+            document.getElementById('guest-auth-section').style.display = 'flex';
+        }
+
+        function toggleUserMenu() {
+            const menu = document.getElementById('user-menu');
+            const isVisible = menu.style.display === 'block';
+            menu.style.display = isVisible ? 'none' : 'block';
+
+            // Close menu when clicking outside
+            if (!isVisible) {
+                setTimeout(() => {
+                    document.addEventListener('click', function closeMenu(e) {
+                        if (!e.target.closest('.user-actions')) {
+                            menu.style.display = 'none';
+                            document.removeEventListener('click', closeMenu);
+                        }
+                    });
+                }, 100);
+            }
+        }
+
+        function logoutUser() {
+            currentUser = null;
+            localStorage.removeItem('currentUser');
+            showGuestInterface();
+
+            // Close any open chat widgets
+            document.querySelectorAll('.chat-widget').forEach(widget => {
+                widget.classList.remove('active');
+            });
+            currentPlatform = null;
+
+            // Show success message
+            showNotification('Logged out successfully!', 'success');
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.innerHTML = `
+                <div class="notification-content">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : (type === 'error' ? 'x-circle' : 'info-circle')}"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 5000);
+        }
+
+        async function testWhatsApp() {
+            try {
+                showNotification('Testing WhatsApp integration...', 'info');
+
+                const response = await fetch('/api/test-whatsapp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification(`✅ ${result.message}`, 'success');
+                } else {
+                    showNotification(`❌ ${result.message}`, 'error');
+                }
+            } catch (error) {
+                console.error('WhatsApp test error:', error);
+                showNotification('❌ WhatsApp test failed - Network error', 'error');
+            }
+
+            // Close user menu
+            document.getElementById('user-menu').style.display = 'none';
+        }        // User Authentication
+        function showModal() {
+            document.getElementById('registration-modal').style.display = 'flex';
+            showRegistration();
+        }
+
+        function closeModal() {
+            document.getElementById('registration-modal').style.display = 'none';
+            resetForms();
+        }
+
+        function showRegistration() {
+            document.getElementById('registration-form').style.display = 'block';
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('form-loading').style.display = 'none';
+            document.getElementById('form-error').style.display = 'none';
+        }
+
+        function showLogin() {
+            document.getElementById('registration-form').style.display = 'none';
+            document.getElementById('login-form').style.display = 'block';
+            document.getElementById('form-loading').style.display = 'none';
+            document.getElementById('form-error').style.display = 'none';
+        }
+
+        function showLoading() {
+            document.getElementById('registration-form').style.display = 'none';
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('form-loading').style.display = 'block';
+            document.getElementById('form-error').style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('form-error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function resetForms() {
+            document.getElementById('registerForm').reset();
+            document.getElementById('loginForm').reset();
+            document.getElementById('form-error').style.display = 'none';
+        }
+
+        // Chat Widget Management
         function toggleChat(platform) {
+            // Check if user is authenticated
+            if (!currentUser) {
+                showModal();
+                return;
+            }
+
             const widget = document.getElementById(`${platform}-widget`);
             const otherPlatform = platform === 'whatsapp' ? 'facebook' : 'whatsapp';
             const otherWidget = document.getElementById(`${otherPlatform}-widget`);
 
+            // Close other widget
             otherWidget.classList.remove('active');
+
+            // Toggle current widget
             widget.classList.toggle('active');
 
             if (widget.classList.contains('active')) {
                 currentPlatform = platform;
                 loadMessages(platform);
+                focusInput(platform);
             } else {
                 currentPlatform = null;
             }
@@ -213,17 +467,50 @@
             currentPlatform = null;
         }
 
+        function focusInput(platform) {
+            setTimeout(() => {
+                const input = document.getElementById(`${platform}-input`);
+                input.focus();
+            }, 100);
+        }
+
+        // Input Handling
         function handleKeyPress(event, platform) {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
                 sendMessage(platform);
             }
         }
 
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 80) + 'px';
+        }
+
+        function toggleSendButton(platform) {
+            const input = document.getElementById(`${platform}-input`);
+            const sendBtn = document.getElementById(`${platform}-send`);
+            const hasContent = input.value.trim().length > 0;
+
+            sendBtn.classList.toggle('active', hasContent);
+        }
+
+        // Message Management
         async function sendMessage(platform) {
+            if (!currentUser) {
+                showModal();
+                return;
+            }
+
             const input = document.getElementById(`${platform}-input`);
             const message = input.value.trim();
 
             if (!message) return;
+
+            // Disable input temporarily
+            input.disabled = true;
+            const sendBtn = document.getElementById(`${platform}-send`);
+            sendBtn.style.opacity = '0.5';
 
             try {
                 const response = await fetch('/api/messages', {
@@ -235,45 +522,369 @@
                     body: JSON.stringify({
                         message: message,
                         platform: platform,
-                        visitor_id: visitorId
+                        user_id: currentUser.id
                     })
                 });
 
                 const data = await response.json();
 
                 if (data.success) {
-                    visitorId = data.visitor_id;
-                    localStorage.setItem('visitor_id', visitorId);
+                    // Add message to UI
+                    addMessageToUI(platform, message, 'sent');
 
-                    addMessageToUI(platform, message, 'visitor');
+                    // Clear input
                     input.value = '';
+                    input.style.height = 'auto';
+                    toggleSendButton(platform);
+
+                    // Show WhatsApp sent status if applicable
+                    if (platform === 'whatsapp' && data.whatsapp_sent) {
+                        showSuccessMessage(platform, 'Message sent via WhatsApp!');
+                    }
+
+                    // Simulate admin response (for demo)
+                    setTimeout(() => {
+                        showTypingIndicator(platform);
+                        setTimeout(() => {
+                            hideTypingIndicator(platform);
+                            addAdminResponse(platform);
+                        }, 2000);
+                    }, 1000);
+                } else {
+                    showErrorMessage(platform, data.message || 'Failed to send message');
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
+                showErrorMessage(platform, 'Failed to send message. Please try again.');
+            } finally {
+                // Re-enable input
+                input.disabled = false;
+                sendBtn.style.opacity = '1';
+                input.focus();
             }
         }
 
-        function addMessageToUI(platform, message, sender) {
+        function addMessageToUI(platform, message, type) {
             const messagesDiv = document.getElementById(`${platform}-messages`);
+
+            // Remove welcome message if exists
+            const welcomeMessage = messagesDiv.querySelector('.welcome-message');
+            if (welcomeMessage) {
+                welcomeMessage.remove();
+            }
+
             const messageEl = document.createElement('div');
-            messageEl.className = `message ${sender}`;
-            messageEl.textContent = message;
+            messageEl.className = `message-bubble message-${type} message-enter`;
+
+            if (type === 'sent') {
+                messageEl.classList.add(platform === 'whatsapp' ? 'whatsapp-sent' : 'facebook-sent');
+            }
+
+            const messageContent = document.createElement('div');
+            messageContent.textContent = message;
+
+            const messageTime = document.createElement('div');
+            messageTime.className = 'message-time';
+            messageTime.textContent = getCurrentTime();
+
+            messageEl.appendChild(messageContent);
+            messageEl.appendChild(messageTime);
             messagesDiv.appendChild(messageEl);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            scrollToBottom(messagesDiv);
+        }
+
+        function addAdminResponse(platform) {
+            const responses = [
+                "Thanks for reaching out! How can I assist you today?",
+                "I've received your message. Let me help you with that.",
+                "Hello! I'm here to help. What can I do for you?",
+                "Thanks for contacting us. I'll be happy to assist you."
+            ];
+
+            const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+            addMessageToUI(platform, randomResponse, 'received');
+        }
+
+        function showTypingIndicator(platform) {
+            const messagesDiv = document.getElementById(`${platform}-messages`);
+
+            const typingEl = document.createElement('div');
+            typingEl.className = 'typing-indicator';
+            typingEl.innerHTML = `
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <span>Support is typing...</span>
+            `;
+
+            messagesDiv.appendChild(typingEl);
+            scrollToBottom(messagesDiv);
+        }
+
+        function hideTypingIndicator(platform) {
+            const messagesDiv = document.getElementById(`${platform}-messages`);
+            const typingIndicator = messagesDiv.querySelector('.typing-indicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+        }
+
+        function showErrorMessage(platform, errorText) {
+            const messagesDiv = document.getElementById(`${platform}-messages`);
+
+            const errorEl = document.createElement('div');
+            errorEl.className = 'error-message';
+            errorEl.style.cssText = `
+                color: #dc2626;
+                text-align: center;
+                padding: 0.75rem;
+                font-size: 0.8rem;
+                background: rgba(220, 38, 38, 0.1);
+                border-radius: 8px;
+                margin: 0.5rem 0;
+            `;
+            errorEl.textContent = errorText;
+
+            messagesDiv.appendChild(errorEl);
+            scrollToBottom(messagesDiv);
+
+            // Auto-remove error after 5 seconds
+            setTimeout(() => {
+                if (errorEl.parentNode) {
+                    errorEl.remove();
+                }
+            }, 5000);
+        }
+
+        // Utility Functions
+        function getCurrentTime() {
+            return new Date().toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        function scrollToBottom(element) {
+            element.scrollTop = element.scrollHeight;
         }
 
         async function loadMessages(platform) {
-            // This will be implemented with real-time updates later
+            // In a real implementation, this would load existing messages
+            // For now, we'll just ensure the welcome message is visible if no messages exist
             const messagesDiv = document.getElementById(`${platform}-messages`);
-            messagesDiv.innerHTML = '<div class="text-center text-gray-500 py-4">Start a conversation</div>';
+            const hasMessages = messagesDiv.querySelector('.message-bubble');
+
+            if (!hasMessages) {
+                // Welcome message is already in HTML, no need to add it
+            }
         }
 
-        // Poll for new messages every 3 seconds when chat is open
+        function showSuccessMessage(platform, message) {
+            const messagesDiv = document.getElementById(`${platform}-messages`);
+
+            const successEl = document.createElement('div');
+            successEl.className = 'success-message';
+            successEl.style.cssText = `
+                color: #059669;
+                text-align: center;
+                padding: 0.75rem;
+                font-size: 0.8rem;
+                background: rgba(5, 150, 105, 0.1);
+                border-radius: 8px;
+                margin: 0.5rem 0;
+            `;
+            successEl.textContent = message;
+
+            messagesDiv.appendChild(successEl);
+            scrollToBottom(messagesDiv);
+
+            // Auto-remove success message after 3 seconds
+            setTimeout(() => {
+                if (successEl.parentNode) {
+                    successEl.remove();
+                }
+            }, 3000);
+        }
+
+        // Form Handlers
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            showLoading();
+
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/api/users/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentUser = result.user;
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    showUserAuthenticated();
+                    closeModal();
+                    showNotification(`Welcome ${result.user.name}! Registration successful.`, 'success');
+                    // Auto-open chat after registration
+                    if (currentPlatform) {
+                        toggleChat(currentPlatform);
+                    }
+                } else {
+                    showRegistration();
+                    if (result.errors) {
+                        const firstError = Object.values(result.errors)[0][0];
+                        showError(firstError);
+                    } else {
+                        showError(result.message || 'Registration failed');
+                    }
+                }
+            } catch (error) {
+                showRegistration();
+                showError('Network error. Please try again.');
+            }
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            showLoading();
+
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/api/users/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentUser = result.user;
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    showUserAuthenticated();
+                    closeModal();
+                    showNotification(`Welcome back ${result.user.name}!`, 'success');
+                    // Auto-open chat after login
+                    if (currentPlatform) {
+                        toggleChat(currentPlatform);
+                    }
+                } else {
+                    showLogin();
+                    showError(result.message || 'Login failed');
+                }
+            } catch (error) {
+                showLogin();
+                showError('Network error. Please try again.');
+            }
+        });
+
+        // Initialize Application
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize user interface based on current state
+            initializeUserInterface();
+            // Add smooth scrolling to hero section
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            });
+
+            // Add entrance animation to feature cards
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.animation = 'slideUp 0.6s ease-out forwards';
+                    }
+                });
+            }, observerOptions);
+
+            document.querySelectorAll('.feature-card').forEach(card => {
+                observer.observe(card);
+            });
+        });
+
+        // Real-time updates (enhanced version)
         setInterval(() => {
             if (currentPlatform && visitorId) {
-                // This will be enhanced with real-time updates
+                // This would poll for new messages from admin
+                // Implementation depends on your real-time strategy (WebSockets, Server-Sent Events, etc.)
             }
         }, 3000);
+
+        // Add CSS animations for entrance effects
+        const style = document.createElement('style');
+        style.textContent = `
+            .typing-indicator {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.75rem;
+                background: white;
+                border-radius: 12px;
+                margin: 0.5rem 0;
+                max-width: 150px;
+                border: 1px solid var(--gray-200);
+                animation: slideUp 0.3s ease-out;
+            }
+
+            .typing-dots {
+                display: flex;
+                gap: 0.125rem;
+            }
+
+            .typing-dots span {
+                width: 4px;
+                height: 4px;
+                background: var(--gray-400);
+                border-radius: 50%;
+                animation: typing 1.4s infinite;
+            }
+
+            .typing-dots span:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+
+            .typing-dots span:nth-child(3) {
+                animation-delay: 0.4s;
+            }
+
+            @keyframes typing {
+                0%, 60%, 100% {
+                    transform: translateY(0);
+                }
+                30% {
+                    transform: translateY(-6px);
+                }
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>

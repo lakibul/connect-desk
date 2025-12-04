@@ -62,9 +62,48 @@ async function loadConversation(conversationId) {
 
         // Show chat container
         document.getElementById('no-conversation').classList.add('d-none');
-        document.getElementById('chat-container').classList.remove('d-none');
-        document.getElementById('chat-container').classList.add('d-flex');
+        const chatContainer = document.getElementById('chat-container');
+        chatContainer.classList.remove('d-none');
+        chatContainer.classList.add('chat-active');
+        chatContainer.style.display = 'flex';
+        chatContainer.style.flexDirection = 'column';
+        chatContainer.style.height = '100%';
         document.getElementById('conversation-id').value = conversationId;
+
+        // Ensure input area is visible and properly styled
+        const inputArea = document.querySelector('.message-input-area');
+        const replyInput = document.getElementById('reply-input');
+        const sendBtn = document.getElementById('send-btn');
+
+        if (inputArea) {
+            inputArea.style.display = 'flex';
+            inputArea.style.visibility = 'visible';
+            inputArea.style.opacity = '1';
+            inputArea.style.position = 'relative';
+            inputArea.style.zIndex = '1000';
+            console.log('Message input area found and made visible');
+        } else {
+            console.error('Message input area not found!');
+        }
+
+        if (replyInput) {
+            replyInput.disabled = false;
+            replyInput.style.display = 'block';
+            console.log('Reply input enabled');
+        }
+
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.style.display = 'flex';
+            console.log('Send button enabled');
+        }
+
+        // Force a layout reflow
+        setTimeout(() => {
+            if (inputArea) {
+                inputArea.style.display = 'flex';
+            }
+        }, 100);
 
         // Update header
         const title = data.conversation.visitor_name || 'Anonymous User';
@@ -155,12 +194,24 @@ function addMessageToUI(message) {
  */
 async function sendReply(event) {
     event.preventDefault();
+    console.log('Send reply function called');
 
     const conversationId = document.getElementById('conversation-id').value;
     const input = document.getElementById('reply-input');
     const message = input.value.trim();
 
-    if (!message) return;
+    console.log('Conversation ID:', conversationId);
+    console.log('Message:', message);
+
+    if (!message) {
+        console.log('No message to send');
+        return;
+    }
+
+    if (!conversationId) {
+        console.error('No conversation ID set');
+        return;
+    }
 
     try {
         const response = await fetch(`/admin/api/conversations/${conversationId}/messages`, {
@@ -226,6 +277,31 @@ function handleTextareaKeydown(event) {
         document.getElementById('reply-form').dispatchEvent(new Event('submit'));
     }
 }
+
+// Initialize when document is ready
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Admin Dashboard JavaScript loaded');
+
+    // Ensure form submission works
+    const replyForm = document.getElementById('reply-form');
+    if (replyForm) {
+        console.log('Reply form found');
+        replyForm.addEventListener('submit', sendReply);
+    } else {
+        console.error('Reply form not found');
+    }
+
+    // Check if input area exists
+    const inputArea = document.querySelector('.message-input-area');
+    if (inputArea) {
+        console.log('Input area found on page load');
+    } else {
+        console.log('Input area not found on page load');
+    }
+
+    // Load initial conversations
+    loadConversations();
+});
 
 // Auto refresh conversations
 setInterval(loadConversations, 5000);

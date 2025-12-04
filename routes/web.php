@@ -3,15 +3,12 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\FrontendController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 // Frontend landing page
-Route::get('/', function () {
-    return view('frontend');
-});
-
-// Public API for sending messages (no auth required)
-Route::post('/api/messages', [MessageController::class, 'store'])->name('messages.store');
+Route::get('/', [FrontendController::class, 'index'])->name('frontend');
 
 // Admin routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
