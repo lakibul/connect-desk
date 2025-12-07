@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\WhatsAppWebhookController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -15,6 +16,10 @@ Route::post('/messages', [MessageController::class, 'store'])->name('messages.st
 
 // WhatsApp test endpoint
 Route::post('/test-whatsapp', [MessageController::class, 'testWhatsApp'])->name('test.whatsapp');
+
+// WhatsApp Webhook (Meta verification and incoming messages)
+Route::get('/whatsapp/webhook', [WhatsAppWebhookController::class, 'verify'])->name('whatsapp.webhook.verify');
+Route::post('/whatsapp/webhook', [WhatsAppWebhookController::class, 'handleWebhook'])->name('whatsapp.webhook.handle');
 
 // API user info (for authenticated users)
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
