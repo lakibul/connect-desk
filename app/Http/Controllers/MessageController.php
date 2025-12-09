@@ -71,21 +71,22 @@ class MessageController extends Controller
                                  "Message:\n{$request->message}\n\n" .
                                  "---\nSent via ConnectDesk Platform";
 
-                \Log::info('Sending WhatsApp message for user', [
-                    'user_id' => $user->id,
-                    'user_name' => $user->name,
-                    'message_id' => $message->id,
-                    'target_number' => '+8801983427887'
-                ]);
+                // \Log::info('Sending WhatsApp message for user', [
+                //     'user_id' => $user->id,
+                //     'user_name' => $user->name,
+                //     'message_id' => $message->id,
+                //     'target_number' => '+8801604509006'
+                // ]);
 
                 $whatsappSent = $this->whatsAppService->sendMessage($whatsappMessage);
+                dd($whatsappSent);
 
                 if (!$whatsappSent) {
                     \Log::warning('Failed to send WhatsApp message', [
                         'user_id' => $user->id,
                         'message_id' => $message->id,
                         'user_name' => $user->name,
-                        'target_number' => '+8801983427887'
+                        'target_number' => '+8801604509006'
                     ]);
                 }
             }            // Update conversation
@@ -168,9 +169,9 @@ class MessageController extends Controller
             return response()->json([
                 'success' => $whatsappSent,
                 'message' => $whatsappSent ?
-                    'WhatsApp test message sent successfully to +8801983427887' :
+                    'WhatsApp test message sent successfully to +8801604509006' :
                     'Failed to send WhatsApp test message',
-                'target_number' => '+8801983427887',
+                'target_number' => '+8801604509006',
                 'timestamp' => now()->toISOString()
             ]);
 

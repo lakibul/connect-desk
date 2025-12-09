@@ -21,7 +21,7 @@ class WhatsAppService
         $this->apiUrl = 'https://graph.facebook.com/v18.0/';
         $this->accessToken = config('services.whatsapp.access_token');
         $this->businessPhoneNumberId = config('services.whatsapp.phone_number_id');
-        $this->targetPhoneNumber = '+8801983427887'; // Your specified number
+        $this->targetPhoneNumber = '+8801604509006'; // Your specified number
     }
 
     /**
@@ -64,12 +64,14 @@ class WhatsAppService
 
             $statusCode = $response->getStatusCode();
             $responseBody = json_decode($response->getBody(), true);
+            dd($responseBody);
 
             if ($statusCode === 200) {
-                Log::info('WhatsApp message sent successfully', [
-                    'recipient' => $recipient,
-                    'message_id' => $responseBody['messages'][0]['id'] ?? null
-                ]);
+                return $responseBody;
+                // Log::info('WhatsApp message sent successfully', [
+                //     'recipient' => $recipient,
+                //     'message_id' => $responseBody['messages'][0]['id'] ?? null
+                // ]);
                 return true;
             }
 

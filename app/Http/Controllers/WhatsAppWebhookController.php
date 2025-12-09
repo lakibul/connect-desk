@@ -20,7 +20,9 @@ class WhatsAppWebhookController extends Controller
         Log::info('Webhook verification attempt', [
             'mode' => $mode,
             'token' => $token,
-            'challenge' => $challenge
+            'challenge' => $challenge,
+            'user_agent' => $request->header('User-Agent'),
+            'all_headers' => $request->headers->all()
         ]);
 
         // Check if a token and mode were sent
@@ -29,10 +31,14 @@ class WhatsAppWebhookController extends Controller
             if ($mode === 'subscribe' && $token === config('services.whatsapp.webhook_secret')) {
                 // Respond with 200 OK and challenge token from the request
                 Log::info('Webhook verified successfully');
-                return response($challenge, 200);
+                return response($challenge, 200)
+                    ->header('Content-Type', 'text/plain');
             } else {
                 // Respond with '403 Forbidden' if verify tokens do not match
-                Log::warning('Webhook verification failed - token mismatch');
+                Log::warning('Webhook verification failed - token mismatch', [
+                    'expected' => config('services.whatsapp.webhook_secret'),
+                    'received' => $token
+                ]);
                 return response('Forbidden', 403);
             }
         }
