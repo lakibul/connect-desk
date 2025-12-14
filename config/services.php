@@ -40,6 +40,7 @@ return [
         'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
         'webhook_secret' => env('WHATSAPP_WEBHOOK_SECRET'),
         'webhook_url' => env('WHATSAPP_WEBHOOK_URL'),
+        'target_phone_number' => env('WHATSAPP_TARGET_PHONE_NUMBER', '8801604509006'),
     ],
 
 ];

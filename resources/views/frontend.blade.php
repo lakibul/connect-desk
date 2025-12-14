@@ -209,7 +209,7 @@
                 </div>
                 <div class="chat-info">
                     <div class="chat-title">WhatsApp Support</div>
-                    <div class="chat-status">Typically replies instantly</div>
+                    <div class="chat-status" id="whatsapp-status">Typically replies instantly</div>
                 </div>
             </div>
             <button class="chat-close" onclick="closeChat('whatsapp')">
@@ -219,7 +219,7 @@
         <div id="whatsapp-messages" class="chat-messages">
             <div class="welcome-message">
                 <div class="welcome-title">👋 Hi there!</div>
-                <div class="welcome-text">Welcome to ConnectDesk. How can we help you today?</div>
+                <div class="welcome-text" id="welcome-text-whatsapp">Welcome to ConnectDesk. How can we help you today?</div>
             </div>
         </div>
         <div class="chat-input-container">
@@ -281,6 +281,13 @@
         let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
         let currentPlatform = null;
         let messagesCache = {};
+        const floatingButtons = document.querySelector('.chat-floating-buttons');
+
+        function updateFloatingButtonsVisibility() {
+            if (!floatingButtons) return;
+            const hasActiveWidget = document.querySelector('.chat-widget.active') !== null;
+            floatingButtons.classList.toggle('hidden', hasActiveWidget);
+        }
 
         // Initialize user interface
         function initializeUserInterface() {
@@ -455,16 +462,35 @@
 
             if (widget.classList.contains('active')) {
                 currentPlatform = platform;
+
+                // Update chat header with user's phone number if WhatsApp
+                if (platform === 'whatsapp') {
+                    updateWhatsAppHeader();
+                }
+
                 loadMessages(platform);
                 focusInput(platform);
             } else {
                 currentPlatform = null;
+            }
+
+            updateFloatingButtonsVisibility();
+        }
+
+        function updateWhatsAppHeader() {
+            if (currentUser && currentUser.phone_number) {
+                const statusDiv = document.getElementById('whatsapp-status');
+                const welcomeDiv = document.getElementById('welcome-text-whatsapp');
+
+                statusDiv.innerHTML = `<i class="bi bi-telephone-fill"></i> ${currentUser.phone_number}`;
+                welcomeDiv.innerHTML = `<strong>Your number:</strong> ${currentUser.phone_number}<br><br>Messages will be sent to our business account. We typically reply instantly!`;
             }
         }
 
         function closeChat(platform) {
             document.getElementById(`${platform}-widget`).classList.remove('active');
             currentPlatform = null;
+            updateFloatingButtonsVisibility();
         }
 
         function focusInput(platform) {
@@ -538,8 +564,14 @@
                     toggleSendButton(platform);
 
                     // Show WhatsApp sent status if applicable
-                    if (platform === 'whatsapp' && data.whatsapp_sent) {
-                        showSuccessMessage(platform, 'Message sent via WhatsApp!');
+                    if (platform === 'whatsapp') {
+                        if (data.whatsapp_sent) {
+                            showSuccessMessage(platform, `✅ Message sent via WhatsApp to +8801604509006`);
+                        } else {
+                            showWarningMessage(platform, '⚠️ Message stored but WhatsApp sending failed. Please try again.');
+                        }
+                    } else {
+                        showSuccessMessage(platform, 'Message sent!');
                     }
 
                     // Simulate admin response (for demo)
@@ -710,6 +742,33 @@
             }, 3000);
         }
 
+        function showWarningMessage(platform, message) {
+            const messagesDiv = document.getElementById(`${platform}-messages`);
+
+            const warningEl = document.createElement('div');
+            warningEl.className = 'warning-message';
+            warningEl.style.cssText = `
+                color: #b45309;
+                text-align: center;
+                padding: 0.75rem;
+                font-size: 0.8rem;
+                background: rgba(180, 83, 9, 0.1);
+                border-radius: 8px;
+                margin: 0.5rem 0;
+            `;
+            warningEl.textContent = message;
+
+            messagesDiv.appendChild(warningEl);
+            scrollToBottom(messagesDiv);
+
+            // Auto-remove warning message after 4 seconds
+            setTimeout(() => {
+                if (warningEl.parentNode) {
+                    warningEl.remove();
+                }
+            }, 4000);
+        }
+
         // Form Handlers
         document.getElementById('registerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -798,6 +857,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize user interface based on current state
             initializeUserInterface();
+            updateFloatingButtonsVisibility();
             // Add smooth scrolling to hero section
             document.querySelectorAll('a[href^="#"]').forEach(anchor => {
                 anchor.addEventListener('click', function (e) {

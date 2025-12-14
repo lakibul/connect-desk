@@ -17,11 +17,12 @@ class WhatsAppService
     public function __construct()
     {
         $this->client = new Client();
-        // You'll need to set these in your .env file
         $this->apiUrl = 'https://graph.facebook.com/v18.0/';
         $this->accessToken = config('services.whatsapp.access_token');
         $this->businessPhoneNumberId = config('services.whatsapp.phone_number_id');
-        $this->targetPhoneNumber = '+8801604509006'; // Your specified number
+        $this->targetPhoneNumber = $this->sanitizePhoneNumber(
+            config('services.whatsapp.target_phone_number')
+        );
     }
 
     /**
@@ -30,16 +31,12 @@ class WhatsAppService
     public function sendMessage(string $message, string $recipientPhone = null): bool
     {
         try {
-            $recipient = $recipientPhone ?? $this->targetPhoneNumber;
+            $recipient = $this->sanitizePhoneNumber($recipientPhone ?? $this->targetPhoneNumber);
 
-            // Log the attempt
-            Log::info('Attempting to send WhatsApp message', [
-                'recipient' => $recipient,
-                'message_preview' => substr($message, 0, 100) . '...',
-                'access_token_exists' => !empty($this->accessToken),
-                'phone_number_id_exists' => !empty($this->businessPhoneNumberId)
-            ]);
-
+            if (empty($recipient)) {
+                Log::error('WhatsApp recipient phone number missing or invalid');
+                return false;
+            }
             if (empty($this->accessToken) || empty($this->businessPhoneNumberId)) {
                 Log::error('WhatsApp credentials not configured');
                 return false;
@@ -52,9 +49,12 @@ class WhatsAppService
                 'to' => $recipient,
                 'type' => 'text',
                 'text' => [
+                    'preview_url' => true,
                     'body' => $message
                 ]
-            ];            $response = $this->client->post($url, [
+            ];
+
+            $response = $this->client->post($url, [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $this->accessToken,
                     'Content-Type' => 'application/json',
@@ -64,14 +64,12 @@ class WhatsAppService
 
             $statusCode = $response->getStatusCode();
             $responseBody = json_decode($response->getBody(), true);
-            dd($responseBody);
 
             if ($statusCode === 200) {
-                return $responseBody;
-                // Log::info('WhatsApp message sent successfully', [
-                //     'recipient' => $recipient,
-                //     'message_id' => $responseBody['messages'][0]['id'] ?? null
-                // ]);
+                Log::info('WhatsApp message sent successfully', [
+                    'recipient' => $recipient,
+                    'message_id' => $responseBody['messages'][0]['id'] ?? null
+                ]);
                 return true;
             }
 
@@ -95,13 +93,44 @@ class WhatsAppService
         }
     }
 
+    protected function sanitizePhoneNumber(?string $number): ?string
+    {
+        if (!$number) {
+            return null;
+        }
+
+        // Remove all non-digits
+        $digitsOnly = preg_replace('/\D+/', '', $number);
+
+        if (!$digitsOnly) {
+            return null;
+        }
+
+        // Ensure proper formatting with country code
+        // Format: 8801604509006 (88 = Bangladesh country code)
+        if (strlen($digitsOnly) === 11 && $digitsOnly[0] === '0') {
+            // Convert 01604509006 to 8801604509006
+            $digitsOnly = '88' . substr($digitsOnly, 1);
+        } elseif (strlen($digitsOnly) === 10) {
+            // Convert 1604509006 to 8801604509006
+            $digitsOnly = '88' . $digitsOnly;
+        }
+
+        return $digitsOnly;
+    }
+
     /**
      * Send a template message (for marketing/notifications)
      */
     public function sendTemplateMessage(string $templateName, array $parameters = [], string $recipientPhone = null): bool
     {
         try {
-            $recipient = $recipientPhone ?? $this->targetPhoneNumber;
+            $recipient = $this->sanitizePhoneNumber($recipientPhone ?? $this->targetPhoneNumber);
+
+            if (empty($recipient)) {
+                Log::error('WhatsApp template recipient phone number missing or invalid');
+                return false;
+            }
 
             $url = $this->apiUrl . $this->businessPhoneNumberId . '/messages';
 

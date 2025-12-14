@@ -17,6 +17,12 @@ Route::post('/messages', [MessageController::class, 'store'])->name('messages.st
 // WhatsApp test endpoint
 Route::post('/test-whatsapp', [MessageController::class, 'testWhatsApp'])->name('test.whatsapp');
 
+// WhatsApp text message endpoint
+Route::post('/send-text', [MessageController::class, 'sendTextMessage'])->name('send.text');
+
+// WhatsApp template message endpoint
+Route::post('/send-template', [MessageController::class, 'sendTemplateMessage'])->name('send.template');
+
 // WhatsApp Webhook (Meta verification and incoming messages)
 Route::get('/whatsapp/webhook', [WhatsAppWebhookController::class, 'verify'])->name('whatsapp.webhook.verify');
 Route::post('/whatsapp/webhook', [WhatsAppWebhookController::class, 'handleWebhook'])->name('whatsapp.webhook.handle');

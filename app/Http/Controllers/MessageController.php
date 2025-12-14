@@ -79,7 +79,6 @@ class MessageController extends Controller
                 // ]);
 
                 $whatsappSent = $this->whatsAppService->sendMessage($whatsappMessage);
-                dd($whatsappSent);
 
                 if (!$whatsappSent) {
                     \Log::warning('Failed to send WhatsApp message', [
@@ -159,6 +158,7 @@ class MessageController extends Controller
     public function testWhatsApp(Request $request)
     {
         try {
+            $targetNumber = config('services.whatsapp.target_phone_number', '8801604509006');
             $testMessage = "🧪 ConnectDesk WhatsApp Integration Test\n\n" .
                           "This is a test message to verify the WhatsApp Business API integration.\n\n" .
                           "Timestamp: " . now()->format('Y-m-d H:i:s') . "\n" .
@@ -169,9 +169,9 @@ class MessageController extends Controller
             return response()->json([
                 'success' => $whatsappSent,
                 'message' => $whatsappSent ?
-                    'WhatsApp test message sent successfully to +8801604509006' :
+                    "WhatsApp test message sent successfully to {$targetNumber}" :
                     'Failed to send WhatsApp test message',
-                'target_number' => '+8801604509006',
+                'target_number' => $targetNumber,
                 'timestamp' => now()->toISOString()
             ]);
 
@@ -184,6 +184,81 @@ class MessageController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'WhatsApp test failed',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Send WhatsApp text message with preview URL
+     */
+    /**
+     * Send WhatsApp text message
+     */
+    public function sendTextMessage(Request $request)
+    {
+        $message = $request->input('body', 'Here is the info you requested! https://www.meta.com/quest/quest-3/');
+        $defaultTarget = config('services.whatsapp.target_phone_number', '8801604509006');
+        $phone = $request->input('to', $defaultTarget);
+
+        $sent = $this->whatsAppService->sendMessage($message, $phone);
+
+        return response()->json([
+            'success' => $sent,
+            'to' => $phone,
+            'body' => $message
+        ]);
+    }
+
+    /**
+     * Send WhatsApp template message (SMS/hello_world)
+     */
+    public function sendTemplateMessage(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'to' => 'nullable|string|regex:/^[0-9]{10,15}$/',
+                'template_name' => 'nullable|string|in:hello_world',
+            ]);
+
+            // Default values
+            $defaultTarget = config('services.whatsapp.target_phone_number', '8801604509006');
+            $recipient = $validated['to'] ?? $defaultTarget;
+            $templateName = $validated['template_name'] ?? 'hello_world';
+
+            // Remove + if present (API expects number without +)
+            $recipient = ltrim($recipient, '+');
+
+            \Log::info('Sending WhatsApp template message', [
+                'recipient' => $recipient,
+                'template' => $templateName,
+                'phone_number_id' => config('services.whatsapp.phone_number_id')
+            ]);
+
+            $templateSent = $this->whatsAppService->sendTemplateMessage($templateName, [], $recipient);
+
+            return response()->json([
+                'success' => $templateSent,
+                'message' => $templateSent ?
+                    "WhatsApp template '{$templateName}' sent successfully to {$recipient}" :
+                    "Failed to send WhatsApp template '{$templateName}' to {$recipient}",
+                'template' => $templateName,
+                'recipient' => $recipient,
+                'phone_number_id' => config('services.whatsapp.phone_number_id'),
+                'messaging_product' => 'whatsapp',
+                'type' => 'template',
+                'timestamp' => now()->toISOString()
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('WhatsApp template send failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'WhatsApp template send failed',
                 'error' => $e->getMessage()
             ], 500);
         }
