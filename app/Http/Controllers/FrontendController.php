@@ -12,6 +12,11 @@ class FrontendController extends Controller
      */
     public function index(): View
     {
-        return view('frontend');
+        $user = auth()->user();
+
+        return view('frontend', [
+            'user' => $user,
+            'isAuthenticated' => auth()->check()
+        ]);
     }
 }

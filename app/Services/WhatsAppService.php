@@ -26,9 +26,14 @@ class WhatsAppService
     }
 
     /**
-     * Send a WhatsApp message
+     * Send a WhatsApp message to the target phone number
+     *
+     * @param string $message The message content to send
+     * @param string|null $recipientPhone The recipient phone number (defaults to target phone from config)
+     * @param string|null $senderPhone The sender's phone number (included in message metadata)
+     * @return bool True if message was sent successfully, false otherwise
      */
-    public function sendMessage(string $message, string $recipientPhone = null): bool
+    public function sendMessage(string $message, string $recipientPhone = null, string $senderPhone = null): bool
     {
         try {
             $recipient = $this->sanitizePhoneNumber($recipientPhone ?? $this->targetPhoneNumber);
@@ -44,13 +49,20 @@ class WhatsAppService
 
             $url = $this->apiUrl . $this->businessPhoneNumberId . '/messages';
 
+            // Format message with sender phone if provided
+            $messageBody = $message;
+            if (!empty($senderPhone)) {
+                // Sender phone is already included in the message content by MessageController
+                // This parameter is kept for documentation and future use
+            }
+
             $payload = [
                 'messaging_product' => 'whatsapp',
                 'to' => $recipient,
                 'type' => 'text',
                 'text' => [
                     'preview_url' => true,
-                    'body' => $message
+                    'body' => $messageBody
                 ]
             ];
 
@@ -68,6 +80,7 @@ class WhatsAppService
             if ($statusCode === 200) {
                 Log::info('WhatsApp message sent successfully', [
                     'recipient' => $recipient,
+                    'sender_phone' => $senderPhone ?? 'unknown',
                     'message_id' => $responseBody['messages'][0]['id'] ?? null
                 ]);
                 return true;

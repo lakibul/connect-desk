@@ -71,21 +71,20 @@ class MessageController extends Controller
                                  "Message:\n{$request->message}\n\n" .
                                  "---\nSent via ConnectDesk Platform";
 
-                // \Log::info('Sending WhatsApp message for user', [
-                //     'user_id' => $user->id,
-                //     'user_name' => $user->name,
-                //     'message_id' => $message->id,
-                //     'target_number' => '+8801604509006'
-                // ]);
-
-                $whatsappSent = $this->whatsAppService->sendMessage($whatsappMessage);
+                // Send to the target WhatsApp number with user's phone number as sender context
+                $whatsappSent = $this->whatsAppService->sendMessage(
+                    $whatsappMessage,
+                    null,  // null uses default target number from config
+                    $user->phone_number  // user's phone as sender context
+                );
 
                 if (!$whatsappSent) {
                     \Log::warning('Failed to send WhatsApp message', [
                         'user_id' => $user->id,
                         'message_id' => $message->id,
                         'user_name' => $user->name,
-                        'target_number' => '+8801604509006'
+                        'user_phone' => $user->phone_number,
+                        'target_number' => config('services.whatsapp.target_phone_number')
                     ]);
                 }
             }            // Update conversation
@@ -262,5 +261,61 @@ class MessageController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Debug WhatsApp configuration and connection
+     */
+    public function whatsappDebug(Request $request)
+    {
+        $accessToken = config('services.whatsapp.access_token');
+        $phoneNumberId = config('services.whatsapp.phone_number_id');
+        $targetPhone = config('services.whatsapp.target_phone_number');
+
+        $tokenStatus = 'unknown';
+        $tokenMessage = '';
+
+        if (empty($accessToken)) {
+            $tokenStatus = 'missing';
+            $tokenMessage = 'Access token not configured in .env';
+        } else {
+            // Try to validate token by making a simple API call
+            try {
+                $client = new \GuzzleHttp\Client();
+                $response = $client->get('https://graph.facebook.com/v18.0/me', [
+                    'headers' => [
+                        'Authorization' => 'Bearer ' . $accessToken,
+                    ]
+                ]);
+                $tokenStatus = 'valid';
+                $tokenMessage = 'Access token is valid';
+            } catch (\Exception $e) {
+                $tokenStatus = 'invalid';
+                $tokenMessage = $e->getMessage();
+            }
+        }
+
+        return response()->json([
+            'configuration' => [
+                'phone_number_id' => $phoneNumberId ?? 'not configured',
+                'target_phone' => $targetPhone ?? 'not configured',
+                'access_token_status' => $tokenStatus,
+                'access_token_message' => $tokenMessage,
+                'token_first_20_chars' => $accessToken ? substr($accessToken, 0, 20) . '...' : 'none',
+            ],
+            'instructions' => [
+                'issue' => 'WhatsApp access token has expired',
+                'reason' => 'Meta access tokens are valid for 24 hours by default',
+                'solution' => 'Get a new access token from Meta/Facebook Dashboard',
+                'steps' => [
+                    '1. Go to https://developers.facebook.com',
+                    '2. Navigate to Settings > Basic > Access Tokens',
+                    '3. Copy the User Access Token or generate a new one',
+                    '4. Update .env file: WHATSAPP_ACCESS_TOKEN="your_new_token"',
+                    '5. Clear config cache: php artisan config:clear',
+                    '6. Test with POST /api/test-whatsapp'
+                ]
+            ]
+        ]);
     }
 }

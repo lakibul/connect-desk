@@ -278,7 +278,17 @@
 
     <script>
         // Application State
-        let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
+        let currentUser = @if($isAuthenticated)
+            {
+                id: {{ $user->id }},
+                name: "{{ $user->name }}",
+                email: "{{ $user->email }}",
+                phone_number: "{{ $user->phone_number ?? '' }}"
+            }
+        @else
+            null
+        @endif;
+
         let currentPlatform = null;
         let messagesCache = {};
         const floatingButtons = document.querySelector('.chat-floating-buttons');
@@ -334,9 +344,8 @@
         }
 
         function logoutUser() {
-            currentUser = null;
-            localStorage.removeItem('currentUser');
-            showGuestInterface();
+            // Show success message
+            showNotification('Logging out...', 'success');
 
             // Close any open chat widgets
             document.querySelectorAll('.chat-widget').forEach(widget => {
@@ -344,8 +353,21 @@
             });
             currentPlatform = null;
 
-            // Show success message
-            showNotification('Logged out successfully!', 'success');
+            // Call logout API endpoint
+            setTimeout(() => {
+                fetch('/api/users/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                }).then(() => {
+                    // Reload page to refresh auth state
+                    window.location.reload();
+                }).catch(() => {
+                    window.location.reload();
+                });
+            }, 500);
         }
 
         function showNotification(message, type = 'info') {
@@ -790,15 +812,11 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    currentUser = result.user;
-                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
-                    showUserAuthenticated();
-                    closeModal();
-                    showNotification(`Welcome ${result.user.name}! Registration successful.`, 'success');
-                    // Auto-open chat after registration
-                    if (currentPlatform) {
-                        toggleChat(currentPlatform);
-                    }
+                    showNotification(`Welcome ${result.user.name}! Registration successful. Redirecting...`, 'success');
+                    // Reload page to refresh auth state from controller
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
                 } else {
                     showRegistration();
                     if (result.errors) {
@@ -834,15 +852,11 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    currentUser = result.user;
-                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
-                    showUserAuthenticated();
-                    closeModal();
-                    showNotification(`Welcome back ${result.user.name}!`, 'success');
-                    // Auto-open chat after login
-                    if (currentPlatform) {
-                        toggleChat(currentPlatform);
-                    }
+                    showNotification(`Welcome back ${result.user.name}! Redirecting...`, 'success');
+                    // Reload page to refresh auth state from controller
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
                 } else {
                     showLogin();
                     showError(result.message || 'Login failed');

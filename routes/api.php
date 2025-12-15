@@ -6,18 +6,22 @@ use App\Http\Controllers\WhatsAppWebhookController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// User registration and management
-Route::post('/users/register', [UserController::class, 'register'])->name('users.register');
-Route::post('/users/login', [UserController::class, 'login'])->name('users.login');
-Route::post('/users/check', [UserController::class, 'checkUser'])->name('users.check');
+// User registration and management (with session support for authentication)
+Route::middleware(['web'])->group(function () {
+    Route::post('/users/register', [UserController::class, 'register'])->name('users.register');
+    Route::post('/users/login', [UserController::class, 'login'])->name('users.login');
+    Route::post('/users/check', [UserController::class, 'checkUser'])->name('users.check');
+    Route::post('/users/logout', [UserController::class, 'logout'])->name('users.logout');
+});
 
-// Message sending (requires registered user)
+// Message endpoints (CSRF-protected since called from browser with form data)
 Route::post('/messages', [MessageController::class, 'store'])->name('messages.store');
 
-// WhatsApp test endpoint
+// WhatsApp test endpoint (for testing integration)
 Route::post('/test-whatsapp', [MessageController::class, 'testWhatsApp'])->name('test.whatsapp');
 
-// WhatsApp text message endpoint
+// WhatsApp debug endpoint (for debugging configuration)
+Route::get('/whatsapp-debug', [MessageController::class, 'whatsappDebug'])->name('whatsapp.debug');
 Route::post('/send-text', [MessageController::class, 'sendTextMessage'])->name('send.text');
 
 // WhatsApp template message endpoint

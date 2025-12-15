@@ -37,6 +37,9 @@ class UserController extends Controller
                 'password' => Hash::make($request->password),
             ]);
 
+            // Automatically login the user after registration
+            auth()->login($user);
+
             return response()->json([
                 'success' => true,
                 'message' => 'User registered successfully',
@@ -83,6 +86,9 @@ class UserController extends Controller
                     'message' => 'Invalid credentials'
                 ], 401);
             }
+
+            // Establish Laravel session for the user
+            auth()->login($user);
 
             return response()->json([
                 'success' => true,
@@ -140,5 +146,30 @@ class UserController extends Controller
                 'phone_number' => $user->phone_number,
             ] : null
         ]);
+    }
+
+    /**
+     * Logout user
+     */
+    public function logout(Request $request)
+    {
+        try {
+            auth()->logout();
+
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Logged out successfully'
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Logout failed',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }
