@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Conversation;
+use App\Models\Message;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -70,6 +72,8 @@ class WhatsAppWebhookController extends Controller
                         // Get the message data
                         $value = $change['value'] ?? [];
                         $messages = $value['messages'] ?? [];
+                        $contacts = $value['contacts'] ?? [];
+                        $contactName = $contacts[0]['profile']['name'] ?? null;
 
                         foreach ($messages as $message) {
                             $from = $message['from'] ?? '';
@@ -86,12 +90,38 @@ class WhatsAppWebhookController extends Controller
                                 'timestamp' => $timestamp
                             ]);
 
-                            // TODO: Process the message
-                            // You can add logic here to:
-                            // - Store message in database
-                            // - Send auto-reply
-                            // - Notify admin
-                            // - Create conversation
+                            if (empty($from)) {
+                                continue;
+                            }
+
+                            $conversation = Conversation::firstOrCreate(
+                                ['visitor_id' => 'whatsapp_' . $from, 'platform' => 'whatsapp'],
+                                [
+                                    'visitor_name' => $contactName ?: $from,
+                                    'visitor_phone' => $from,
+                                    'unread_count' => 0,
+                                ]
+                            );
+
+                            $messageBody = $text;
+                            if (empty($messageBody)) {
+                                $messageBody = $type ? strtoupper($type) . ' message received' : 'Message received';
+                            }
+
+                            Message::create([
+                                'conversation_id' => $conversation->id,
+                                'message' => $messageBody,
+                                'sender_type' => 'visitor',
+                                'platform' => 'whatsapp',
+                                'is_read' => false,
+                            ]);
+
+                            $conversation->update([
+                                'visitor_phone' => $conversation->visitor_phone ?: $from,
+                                'visitor_name' => $conversation->visitor_name ?: ($contactName ?: $from),
+                                'last_message_at' => now(),
+                                'unread_count' => $conversation->unread_count + 1,
+                            ]);
                         }
                     }
                 }

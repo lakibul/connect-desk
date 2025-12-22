@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\User;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Support\Facades\Log;
@@ -35,6 +36,100 @@ class WhatsAppService
      */
     public function sendMessage(string $message, string $recipientPhone = null, string $senderPhone = null): bool
     {
+        return $this->sendMessageWithCredentials(
+            $message,
+            $recipientPhone,
+            $senderPhone,
+            $this->accessToken,
+            $this->businessPhoneNumberId
+        );
+    }
+
+    public function sendMessageForUser(User $user, string $message, string $recipientPhone = null): bool
+    {
+        return $this->sendMessageWithCredentials(
+            $message,
+            $recipientPhone,
+            $user->phone_number,
+            $this->resolveAccessToken($user),
+            $this->resolvePhoneNumberId($user)
+        );
+    }
+
+    public function sendTemplateMessageForUser(User $user, string $templateName, array $parameters = [], string $recipientPhone = null): bool
+    {
+        return $this->sendTemplateMessageWithCredentials(
+            $templateName,
+            $parameters,
+            $recipientPhone,
+            $this->resolveAccessToken($user),
+            $this->resolvePhoneNumberId($user)
+        );
+    }
+
+    public function normalizePhoneNumber(?string $number): ?string
+    {
+        return $this->sanitizePhoneNumber($number);
+    }
+
+    protected function sanitizePhoneNumber(?string $number): ?string
+    {
+        if (!$number) {
+            return null;
+        }
+
+        // Remove all non-digits
+        $digitsOnly = preg_replace('/\D+/', '', $number);
+
+        if (!$digitsOnly) {
+            return null;
+        }
+
+        // Ensure proper formatting with country code
+        // Format: 8801604509006 (88 = Bangladesh country code)
+        if (strlen($digitsOnly) === 11 && $digitsOnly[0] === '0') {
+            // Convert 01604509006 to 8801604509006
+            $digitsOnly = '88' . substr($digitsOnly, 1);
+        } elseif (strlen($digitsOnly) === 10) {
+            // Convert 1604509006 to 8801604509006
+            $digitsOnly = '88' . $digitsOnly;
+        }
+
+        return $digitsOnly;
+    }
+
+    /**
+     * Send a template message (for marketing/notifications)
+     */
+    public function sendTemplateMessage(string $templateName, array $parameters = [], string $recipientPhone = null): bool
+    {
+        return $this->sendTemplateMessageWithCredentials(
+            $templateName,
+            $parameters,
+            $recipientPhone,
+            $this->accessToken,
+            $this->businessPhoneNumberId
+        );
+    }
+
+    /**
+     * Verify webhook signature
+     */
+    public function verifyWebhook(string $signature, string $payload): bool
+    {
+        $webhookSecret = config('services.whatsapp.webhook_secret');
+        $expectedSignature = 'sha256=' . hash_hmac('sha256', $payload, $webhookSecret);
+
+        return hash_equals($expectedSignature, $signature);
+    }
+
+    protected function sendMessageWithCredentials(
+        string $message,
+        ?string $recipientPhone,
+        ?string $senderPhone,
+        ?string $accessToken,
+        ?string $phoneNumberId
+    ): bool {
         try {
             $recipient = $this->sanitizePhoneNumber($recipientPhone ?? $this->targetPhoneNumber);
 
@@ -42,18 +137,17 @@ class WhatsAppService
                 Log::error('WhatsApp recipient phone number missing or invalid');
                 return false;
             }
-            if (empty($this->accessToken) || empty($this->businessPhoneNumberId)) {
+            if (empty($accessToken) || empty($phoneNumberId)) {
                 Log::error('WhatsApp credentials not configured');
                 return false;
             }
 
-            $url = $this->apiUrl . $this->businessPhoneNumberId . '/messages';
+            $url = $this->apiUrl . $phoneNumberId . '/messages';
 
-            // Format message with sender phone if provided
+            // Sender phone is already included in the message content by MessageController
             $messageBody = $message;
             if (!empty($senderPhone)) {
-                // Sender phone is already included in the message content by MessageController
-                // This parameter is kept for documentation and future use
+                // Placeholder for future sender-context metadata
             }
 
             $payload = [
@@ -68,7 +162,7 @@ class WhatsAppService
 
             $response = $this->client->post($url, [
                 'headers' => [
-                    'Authorization' => 'Bearer ' . $this->accessToken,
+                    'Authorization' => 'Bearer ' . $accessToken,
                     'Content-Type' => 'application/json',
                 ],
                 'json' => $payload
@@ -106,37 +200,13 @@ class WhatsAppService
         }
     }
 
-    protected function sanitizePhoneNumber(?string $number): ?string
-    {
-        if (!$number) {
-            return null;
-        }
-
-        // Remove all non-digits
-        $digitsOnly = preg_replace('/\D+/', '', $number);
-
-        if (!$digitsOnly) {
-            return null;
-        }
-
-        // Ensure proper formatting with country code
-        // Format: 8801604509006 (88 = Bangladesh country code)
-        if (strlen($digitsOnly) === 11 && $digitsOnly[0] === '0') {
-            // Convert 01604509006 to 8801604509006
-            $digitsOnly = '88' . substr($digitsOnly, 1);
-        } elseif (strlen($digitsOnly) === 10) {
-            // Convert 1604509006 to 8801604509006
-            $digitsOnly = '88' . $digitsOnly;
-        }
-
-        return $digitsOnly;
-    }
-
-    /**
-     * Send a template message (for marketing/notifications)
-     */
-    public function sendTemplateMessage(string $templateName, array $parameters = [], string $recipientPhone = null): bool
-    {
+    protected function sendTemplateMessageWithCredentials(
+        string $templateName,
+        array $parameters,
+        ?string $recipientPhone,
+        ?string $accessToken,
+        ?string $phoneNumberId
+    ): bool {
         try {
             $recipient = $this->sanitizePhoneNumber($recipientPhone ?? $this->targetPhoneNumber);
 
@@ -144,8 +214,12 @@ class WhatsAppService
                 Log::error('WhatsApp template recipient phone number missing or invalid');
                 return false;
             }
+            if (empty($accessToken) || empty($phoneNumberId)) {
+                Log::error('WhatsApp credentials not configured');
+                return false;
+            }
 
-            $url = $this->apiUrl . $this->businessPhoneNumberId . '/messages';
+            $url = $this->apiUrl . $phoneNumberId . '/messages';
 
             $payload = [
                 'messaging_product' => 'whatsapp',
@@ -170,7 +244,7 @@ class WhatsAppService
 
             $response = $this->client->post($url, [
                 'headers' => [
-                    'Authorization' => 'Bearer ' . $this->accessToken,
+                    'Authorization' => 'Bearer ' . $accessToken,
                     'Content-Type' => 'application/json',
                 ],
                 'json' => $payload
@@ -208,14 +282,79 @@ class WhatsAppService
         }
     }
 
-    /**
-     * Verify webhook signature
-     */
-    public function verifyWebhook(string $signature, string $payload): bool
+    protected function resolveAccessToken(?User $user): ?string
     {
-        $webhookSecret = config('services.whatsapp.webhook_secret');
-        $expectedSignature = 'sha256=' . hash_hmac('sha256', $payload, $webhookSecret);
+        if ($user && !empty($user->whatsapp_access_token)) {
+            return $user->whatsapp_access_token;
+        }
 
-        return hash_equals($expectedSignature, $signature);
+        return $this->accessToken;
+    }
+
+    protected function resolvePhoneNumberId(?User $user): ?string
+    {
+        if ($user && !empty($user->whatsapp_phone_number_id)) {
+            return $user->whatsapp_phone_number_id;
+        }
+
+        return $this->businessPhoneNumberId;
+    }
+
+    /**
+     * Check if a WhatsApp number exists and is valid
+     * 
+     * @param string $phoneNumber The phone number to validate
+     * @param User|null $user The user whose credentials to use
+     * @return array Returns ['exists' => bool, 'message' => string]
+     */
+    public function validateWhatsAppNumber(string $phoneNumber, ?User $user = null): array
+    {
+        try {
+            $sanitizedNumber = $this->sanitizePhoneNumber($phoneNumber);
+            
+            if (empty($sanitizedNumber)) {
+                return [
+                    'exists' => false,
+                    'message' => 'Invalid phone number format. Please enter a valid number.'
+                ];
+            }
+
+            // Check if number has country code
+            if (strlen($sanitizedNumber) < 10) {
+                return [
+                    'exists' => false,
+                    'message' => 'Phone number is too short. Include country code (e.g., 8801XXXXXXXXX)'
+                ];
+            }
+
+            $accessToken = $this->resolveAccessToken($user);
+            $phoneNumberId = $this->resolvePhoneNumberId($user);
+
+            if (empty($accessToken) || empty($phoneNumberId)) {
+                return [
+                    'exists' => false,
+                    'message' => 'WhatsApp credentials not configured. Please configure in Settings.'
+                ];
+            }
+
+            // For now, we'll consider the number valid if it's properly formatted
+            // WhatsApp will reject invalid numbers when we try to send
+            return [
+                'exists' => true,
+                'message' => 'Number appears valid',
+                'formatted_number' => $sanitizedNumber
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Error validating WhatsApp number', [
+                'error' => $e->getMessage(),
+                'phone' => $phoneNumber
+            ]);
+            
+            return [
+                'exists' => false,
+                'message' => 'Unable to validate number. Please try again.'
+            ];
+        }
     }
 }

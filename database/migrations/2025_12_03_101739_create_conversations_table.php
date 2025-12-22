@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('visitor_name')->nullable();
             $table->string('visitor_email')->nullable();
-            $table->string('visitor_id')->unique(); // Unique identifier for anonymous users
+            $table->string('visitor_id')->unique()->nullable(); // Unique identifier for anonymous users
             $table->enum('platform', ['whatsapp', 'facebook']);
             $table->integer('unread_count')->default(0);
             $table->timestamp('last_message_at')->nullable();

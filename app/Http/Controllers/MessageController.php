@@ -47,9 +47,13 @@ class MessageController extends Controller
                 [
                     'visitor_name' => $user->name,
                     'visitor_email' => $user->email,
+                    'visitor_phone' => $user->phone_number,
                     'unread_count' => 0,
                 ]
             );
+            if (empty($conversation->visitor_phone) && !empty($user->phone_number)) {
+                $conversation->update(['visitor_phone' => $user->phone_number]);
+            }
 
             // Create message
             $message = Message::create([
@@ -116,14 +120,66 @@ class MessageController extends Controller
 
     public function sendAdminMessage(Request $request, Conversation $conversation)
     {
-        $request->validate([
-            'message' => 'required|string',
+        $validated = $request->validate([
+            'message_type' => 'nullable|in:text,template',
+            'message' => 'required_unless:message_type,template|nullable|string',
+            'template_name' => 'required_if:message_type,template|nullable|string',
         ]);
+
+        $messageType = $validated['message_type'] ?? 'text';
+        $admin = $request->user();
+        $whatsappSent = null;
+
+        if ($messageType === 'template' && $conversation->platform !== 'whatsapp') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Template messages are only supported for WhatsApp conversations.'
+            ], 422);
+        }
+
+        if ($conversation->platform === 'whatsapp') {
+            $recipient = $this->resolveConversationPhone($conversation);
+            if (empty($recipient)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Recipient phone number is missing for this conversation.'
+                ], 422);
+            }
+
+            if ($messageType === 'template') {
+                $templateName = $validated['template_name'];
+                $whatsappSent = $this->whatsAppService->sendTemplateMessageForUser(
+                    $admin,
+                    $templateName,
+                    [],
+                    $recipient
+                );
+                $messageBody = "Template: {$templateName}";
+            } else {
+                $messageBody = $validated['message'];
+                $whatsappSent = $this->whatsAppService->sendMessageForUser(
+                    $admin,
+                    $messageBody,
+                    $recipient
+                );
+            }
+
+            if (!$whatsappSent) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to send WhatsApp message. Check admin WhatsApp credentials.'
+                ], 502);
+            }
+        } else {
+            $messageBody = $validated['message'];
+        }
 
         $message = Message::create([
             'conversation_id' => $conversation->id,
-            'message' => $request->message,
+            'user_id' => $admin ? $admin->id : null,
+            'message' => $messageBody,
             'sender_type' => 'admin',
+            'platform' => $conversation->platform,
             'is_read' => false,
         ]);
 
@@ -136,7 +192,108 @@ class MessageController extends Controller
         return response()->json([
             'success' => true,
             'message' => $message,
+            'whatsapp_sent' => $whatsappSent,
         ]);
+    }
+
+    public function sendAdminWhatsApp(Request $request)
+    {
+        $validated = $request->validate([
+            'to' => 'required|string|regex:/^[0-9\\+\\-\\s\\(\\)]+$/',
+            'message_type' => 'nullable|in:text,template',
+            'message' => 'required_unless:message_type,template|nullable|string',
+            'template_name' => 'required_if:message_type,template|nullable|string',
+        ]);
+
+        $admin = $request->user();
+        $messageType = $validated['message_type'] ?? 'text';
+        $recipient = $this->whatsAppService->normalizePhoneNumber($validated['to']);
+
+        if (empty($recipient)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Recipient phone number is invalid.'
+            ], 422);
+        }
+
+        $conversation = Conversation::firstOrCreate(
+            ['visitor_id' => 'whatsapp_' . $recipient, 'platform' => 'whatsapp', 'user_id' => $admin->id],
+            [
+                'visitor_name' => $recipient,
+                'visitor_phone' => $recipient,
+                'unread_count' => 0,
+                'user_id' => $admin->id,
+            ]
+        );
+
+        if (empty($conversation->visitor_phone)) {
+            $conversation->update(['visitor_phone' => $recipient]);
+        }
+
+        if ($messageType === 'template') {
+            $templateName = $validated['template_name'];
+            $sent = $this->whatsAppService->sendTemplateMessageForUser(
+                $admin,
+                $templateName,
+                [],
+                $recipient
+            );
+            $messageBody = "Template: {$templateName}";
+        } else {
+            $messageBody = $validated['message'];
+            $sent = $this->whatsAppService->sendMessageForUser(
+                $admin,
+                $messageBody,
+                $recipient
+            );
+        }
+
+        if (!$sent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send WhatsApp message. Check admin WhatsApp credentials.'
+            ], 502);
+        }
+
+        $message = Message::create([
+            'conversation_id' => $conversation->id,
+            'user_id' => $admin ? $admin->id : null,
+            'message' => $messageBody,
+            'sender_type' => 'admin',
+            'platform' => 'whatsapp',
+            'is_read' => false,
+        ]);
+
+        $conversation->update([
+            'last_message_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'conversation_id' => $conversation->id,
+            'whatsapp_sent' => true,
+        ], 201);
+    }
+
+    protected function resolveConversationPhone(Conversation $conversation): ?string
+    {
+        if (!empty($conversation->visitor_phone)) {
+            return $conversation->visitor_phone;
+        }
+
+        if (!empty($conversation->visitor_id) && Str::startsWith($conversation->visitor_id, 'user_')) {
+            $userId = (int) Str::after($conversation->visitor_id, 'user_');
+            if ($userId > 0) {
+                $user = User::find($userId);
+                if ($user && !empty($user->phone_number)) {
+                    $conversation->update(['visitor_phone' => $user->phone_number]);
+                    return $user->phone_number;
+                }
+            }
+        }
+
+        return null;
     }
 
     public function markAsRead(Conversation $conversation)

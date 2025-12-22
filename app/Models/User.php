@@ -21,6 +21,8 @@ class User extends Authenticatable
         'name',
         'email',
         'phone_number',
+        'whatsapp_access_token',
+        'whatsapp_phone_number_id',
         'password',
     ];
 
@@ -45,5 +47,21 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Get the conversations for the user (admin).
+     */
+    public function conversations()
+    {
+        return $this->hasMany(Conversation::class);
+    }
+
+    /**
+     * Get the messages for the user (admin).
+     */
+    public function messages()
+    {
+        return $this->hasMany(Message::class);
     }
 }

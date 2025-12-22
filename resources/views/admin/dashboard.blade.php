@@ -33,7 +33,7 @@
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i>Profile</a></li>
-                        <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i>Settings</a></li>
+                        <li><a class="dropdown-item" href="{{ route('admin.settings') }}"><i class="bi bi-gear me-2"></i>Settings</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
                             <form method="POST" action="{{ route('logout') }}">
@@ -51,6 +51,16 @@
 
     <!-- Main Dashboard Container -->
     <div class="dashboard-container">
+        <!-- WhatsApp Status Alert -->
+        @if(empty(auth()->user()->whatsapp_access_token) || empty(auth()->user()->whatsapp_phone_number_id))
+        <div class="alert alert-warning alert-dismissible fade show m-3" role="alert" style="border-radius: 12px;">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <strong>WhatsApp Not Connected:</strong> Configure your WhatsApp Business API credentials in 
+            <a href="{{ route('admin.settings') }}" class="alert-link">Settings</a> to send messages.
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        @endif
+        
         <div class="row g-0 h-100">
             <!-- Sidebar -->
             <div class="col-md-3 sidebar-container">
@@ -60,12 +70,20 @@
                         <button class="platform-tab active" data-platform="whatsapp">
                             <i class="bi bi-whatsapp"></i>
                             <span>WhatsApp</span>
-                            <span class="badge">12</span>
+                            <span class="badge">0</span>
                         </button>
                         <button class="platform-tab" data-platform="facebook">
                             <i class="bi bi-facebook"></i>
                             <span>Facebook</span>
-                            <span class="badge">8</span>
+                            <span class="badge">0</span>
+                        </button>
+                    </div>
+
+                    <!-- New Conversation Button -->
+                    <div class="p-3">
+                        <button class="btn btn-success w-100" id="newConversationBtn" style="border-radius: 8px; font-weight: 500;">
+                            <i class="bi bi-plus-circle me-2"></i>
+                            Start New Conversation
                         </button>
                     </div>
 
@@ -89,93 +107,12 @@
                     <div class="chat-threads">
                         <!-- WhatsApp Threads -->
                         <div class="thread-container active" id="whatsapp-threads">
-                            <div class="chat-thread unread" data-conversation-id="1">
-                                <div class="thread-avatar whatsapp-avatar">
-                                    <i class="bi bi-person-fill"></i>
-                                </div>
-                                <div class="thread-content">
-                                    <div class="thread-header">
-                                        <h6 class="thread-name">John Smith</h6>
-                                        <span class="thread-time">2m ago</span>
-                                    </div>
-                                    <p class="thread-message">Hey, I need help with my order...</p>
-                                    <div class="thread-indicators">
-                                        <span class="status-badge unread">Unread</span>
-                                        <i class="bi bi-whatsapp platform-icon"></i>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="chat-thread" data-conversation-id="2">
-                                <div class="thread-avatar whatsapp-avatar">
-                                    <i class="bi bi-person-fill"></i>
-                                </div>
-                                <div class="thread-content">
-                                    <div class="thread-header">
-                                        <h6 class="thread-name">Sarah Johnson</h6>
-                                        <span class="thread-time">15m ago</span>
-                                    </div>
-                                    <p class="thread-message">Thank you for the quick response!</p>
-                                    <div class="thread-indicators">
-                                        <span class="status-badge active">Active</span>
-                                        <i class="bi bi-whatsapp platform-icon"></i>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="chat-thread" data-conversation-id="3">
-                                <div class="thread-avatar whatsapp-avatar">
-                                    <i class="bi bi-person-fill"></i>
-                                </div>
-                                <div class="thread-content">
-                                    <div class="thread-header">
-                                        <h6 class="thread-name">Mike Wilson</h6>
-                                        <span class="thread-time">1h ago</span>
-                                    </div>
-                                    <p class="thread-message">Can you send me the tracking info?</p>
-                                    <div class="thread-indicators">
-                                        <span class="status-badge resolved">Resolved</span>
-                                        <i class="bi bi-whatsapp platform-icon"></i>
-                                    </div>
-                                </div>
-                            </div>
+                            <div class="thread-empty">No WhatsApp conversations yet.</div>
                         </div>
 
                         <!-- Facebook Threads -->
                         <div class="thread-container" id="facebook-threads">
-                            <div class="chat-thread unread" data-conversation-id="4">
-                                <div class="thread-avatar facebook-avatar">
-                                    <i class="bi bi-person-fill"></i>
-                                </div>
-                                <div class="thread-content">
-                                    <div class="thread-header">
-                                        <h6 class="thread-name">Emma Davis</h6>
-                                        <span class="thread-time">5m ago</span>
-                                    </div>
-                                    <p class="thread-message">Is this product still available?</p>
-                                    <div class="thread-indicators">
-                                        <span class="status-badge unread">Unread</span>
-                                        <i class="bi bi-facebook platform-icon"></i>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="chat-thread" data-conversation-id="5">
-                                <div class="thread-avatar facebook-avatar">
-                                    <i class="bi bi-person-fill"></i>
-                                </div>
-                                <div class="thread-content">
-                                    <div class="thread-header">
-                                        <h6 class="thread-name">Robert Brown</h6>
-                                        <span class="thread-time">30m ago</span>
-                                    </div>
-                                    <p class="thread-message">Great service, thanks!</p>
-                                    <div class="thread-indicators">
-                                        <span class="status-badge active">Active</span>
-                                        <i class="bi bi-facebook platform-icon"></i>
-                                    </div>
-                                </div>
-                            </div>
+                            <div class="thread-empty">No Facebook conversations yet.</div>
                         </div>
                     </div>
                 </div>
@@ -191,18 +128,22 @@
                                 <i class="bi bi-person-fill"></i>
                             </div>
                             <div class="user-details">
-                                <h5 class="user-name">John Smith</h5>
+                                <h5 class="user-name">Select a conversation</h5>
                                 <div class="user-status">
                                     <span class="platform-indicator whatsapp">
                                         <i class="bi bi-whatsapp"></i>
-                                        WhatsApp
+                                        <span class="platform-label">WhatsApp</span>
                                     </span>
                                     <span class="status-dot online"></span>
-                                    <span class="status-text">Online</span>
+                                    <span class="status-text" id="userPhone">No chat selected</span>
                                 </div>
                             </div>
                         </div>
                         <div class="chat-actions">
+                            <button class="btn btn-success btn-sm" id="newWhatsAppBtn" title="Start new WhatsApp conversation">
+                                <i class="bi bi-plus-circle me-1"></i>
+                                <span class="d-none d-md-inline">New</span>
+                            </button>
                             <button class="btn btn-outline-secondary btn-sm" title="Search in conversation">
                                 <i class="bi bi-search"></i>
                             </button>
@@ -220,43 +161,7 @@
 
                     <!-- Messages Container -->
                     <div class="messages-container" id="messagesContainer">
-                        <div class="message-group">
-                            <div class="message received">
-                                <div class="message-content">
-                                    <p>Hey, I need help with my order. It hasn't arrived yet and it's been 5 days.</p>
-                                    <span class="message-time">2:30 PM</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="message-group">
-                            <div class="message sent">
-                                <div class="message-content">
-                                    <p>Hi! I'd be happy to help you with that. Can you please provide your order number?</p>
-                                    <span class="message-time">2:32 PM</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="message-group">
-                            <div class="message received">
-                                <div class="message-content">
-                                    <p>Sure, it's #ORD-123456</p>
-                                    <span class="message-time">2:33 PM</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="message-group">
-                            <div class="message sent">
-                                <div class="message-content">
-                                    <p>Thank you! Let me check the status for you. I can see your order is currently in transit and should arrive tomorrow. You'll receive a tracking notification shortly.</p>
-                                    <span class="message-time">2:35 PM</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="typing-indicator">
+                        <div class="typing-indicator" style="display: none;">
                             <div class="typing-dots">
                                 <span></span>
                                 <span></span>
@@ -268,6 +173,13 @@
 
                     <!-- Message Input -->
                     <div class="message-input-container">
+                        <div class="message-options">
+                            <select class="form-select form-select-sm" id="messageTypeSelect">
+                                <option value="text" selected>Text message</option>
+                                <option value="template">Template message</option>
+                            </select>
+                            <input type="text" class="form-control form-control-sm" id="templateNameInput" placeholder="Template name (e.g. hello_world)" style="display: none;">
+                        </div>
                         <div class="message-input">
                             <button class="attachment-btn" title="Attach file">
                                 <i class="bi bi-paperclip"></i>
@@ -305,6 +217,84 @@
         </div>
     </div>
 
+    <!-- New WhatsApp Message Modal -->
+    <div class="modal fade" id="newWhatsAppModal" tabindex="-1" aria-labelledby="newWhatsAppModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="newWhatsAppModalLabel">
+                        <i class="bi bi-whatsapp text-success me-2"></i>
+                        Start New WhatsApp Conversation
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger d-none" id="newWhatsAppError"></div>
+                    <div class="alert alert-success d-none" id="newWhatsAppSuccess"></div>
+                    
+                    <!-- Development Mode Notice -->
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Development Mode:</strong> You can only send to phone numbers added as test numbers in 
+                        <a href="https://developers.facebook.com/apps" target="_blank" class="alert-link">Facebook Developer Console</a>.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                    
+                    <form id="newWhatsAppForm">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">WhatsApp Number</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-telephone"></i></span>
+                                <input type="text" class="form-control" id="newWhatsAppNumber" 
+                                    placeholder="e.g., 8801XXXXXXXXX or 01XXXXXXXXX" required>
+                            </div>
+                            <small class="form-text text-muted">
+                                Enter with country code (e.g., 8801XXXXXXXXX) or without (e.g., 01XXXXXXXXX)
+                            </small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Message Type</label>
+                            <select class="form-select" id="newMessageType">
+                                <option value="template" selected>Template Message (Recommended for new chats)</option>
+                                <option value="text">Text Message</option>
+                            </select>
+                            <small class="form-text text-muted">
+                                <i class="bi bi-info-circle"></i> WhatsApp requires a template message to start new conversations
+                            </small>
+                        </div>
+
+                        <div class="mb-3" id="templateSection">
+                            <label class="form-label fw-semibold">Template Name</label>
+                            <input type="text" class="form-control" id="newTemplateName" 
+                                placeholder="e.g., hello_world" value="hello_world">
+                            <small class="form-text text-muted">
+                                Use an approved template from your WhatsApp Business account
+                            </small>
+                        </div>
+                        
+                        <div class="mb-3 d-none" id="textMessageSection">
+                            <label class="form-label fw-semibold">Message</label>
+                            <textarea class="form-control" id="newWhatsAppInitialMessage" rows="3" 
+                                placeholder="Type your message..."></textarea>
+                            <small class="form-text text-muted">
+                                Note: Text messages only work if customer messaged you in last 24 hours
+                            </small>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success" id="startConversationBtn">
+                                <i class="bi bi-check-circle me-2"></i>
+                                <span id="btnText">Start Conversation</span>
+                                <span class="spinner-border spinner-border-sm ms-2 d-none" id="btnSpinner" role="status" aria-hidden="true"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -312,34 +302,28 @@
         class ConnectDeskApp {
             constructor() {
                 this.currentPlatform = 'whatsapp';
-                this.currentConversation = null;
+                this.currentConversationId = null;
+                this.conversations = [];
+                this.csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                this.modal = new bootstrap.Modal(document.getElementById('newWhatsAppModal'));
                 this.initializeApp();
             }
 
             initializeApp() {
                 this.setupEventListeners();
                 this.autoResizeTextarea();
-                this.loadInitialConversation();
+                this.toggleMessageType();
+                this.loadConversations();
             }
 
             setupEventListeners() {
-                // Platform tab switching
                 document.querySelectorAll('.platform-tab').forEach(tab => {
-                    tab.addEventListener('click', (e) => this.switchPlatform(e.target.dataset.platform));
+                    tab.addEventListener('click', (e) => this.switchPlatform(e.currentTarget.dataset.platform));
                 });
 
-                // Chat thread selection
-                document.querySelectorAll('.chat-thread').forEach(thread => {
-                    thread.addEventListener('click', (e) => this.selectConversation(e.currentTarget));
-                });
-
-                // Search functionality
                 document.getElementById('searchInput').addEventListener('input', (e) => this.searchConversations(e.target.value));
-
-                // Status filter
                 document.getElementById('statusFilter').addEventListener('change', (e) => this.filterByStatus(e.target.value));
 
-                // Message sending
                 document.getElementById('sendBtn').addEventListener('click', () => this.sendMessage());
                 document.getElementById('messageInput').addEventListener('keypress', (e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -347,56 +331,140 @@
                         this.sendMessage();
                     }
                 });
+                document.getElementById('messageTypeSelect').addEventListener('change', () => this.toggleMessageType());
 
-                // Quick replies
                 document.querySelectorAll('.quick-reply-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => this.insertQuickReply(e.target.textContent));
                 });
 
-                // Auto-scroll to bottom
-                this.scrollToBottom();
+                document.getElementById('newWhatsAppBtn').addEventListener('click', () => {
+                    this.clearNewWhatsAppForm();
+                    this.modal.show();
+                });
+                document.getElementById('newConversationBtn').addEventListener('click', () => {
+                    this.clearNewWhatsAppForm();
+                    this.modal.show();
+                });
+                document.getElementById('newMessageType').addEventListener('change', () => this.toggleNewMessageType());
+                document.getElementById('newWhatsAppForm').addEventListener('submit', (e) => this.sendNewWhatsApp(e));
+
+                this.setComposeEnabled(false);
             }
 
-            switchPlatform(platform) {
-                // Update active tab
-                document.querySelectorAll('.platform-tab').forEach(tab => {
-                    tab.classList.toggle('active', tab.dataset.platform === platform);
-                });
+            async loadConversations(selectConversationId = null) {
+                try {
+                    const response = await fetch('/admin/api/conversations', {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!response.ok) {
+                        throw new Error('Failed to load conversations');
+                    }
 
-                // Show/hide thread containers
-                document.querySelectorAll('.thread-container').forEach(container => {
-                    container.classList.toggle('active', container.id === `${platform}-threads`);
-                });
+                    const data = await response.json();
+                    this.conversations = data.conversations || [];
+                    this.renderConversations();
+                    this.updatePlatformBadges();
 
-                this.currentPlatform = platform;
-                this.updatePlatformIndicator(platform);
+                    const targetId = selectConversationId || this.currentConversationId;
+                    if (targetId) {
+                        await this.selectConversationById(targetId);
+                    } else if (this.conversations.length > 0) {
+                        await this.selectConversationById(this.conversations[0].id);
+                    } else {
+                        this.showEmptyState();
+                    }
+                } catch (error) {
+                    console.error(error);
+                    this.showEmptyState();
+                }
             }
 
-            selectConversation(threadElement) {
-                // Remove active class from all threads
-                document.querySelectorAll('.chat-thread').forEach(thread => {
-                    thread.classList.remove('active');
+            renderConversations() {
+                const whatsappContainer = document.getElementById('whatsapp-threads');
+                const facebookContainer = document.getElementById('facebook-threads');
+                whatsappContainer.innerHTML = '';
+                facebookContainer.innerHTML = '';
+
+                const platformBuckets = { whatsapp: [], facebook: [] };
+                this.conversations.forEach(conversation => {
+                    if (platformBuckets[conversation.platform]) {
+                        platformBuckets[conversation.platform].push(conversation);
+                    }
                 });
 
-                // Add active class to selected thread
-                threadElement.classList.add('active');
-                threadElement.classList.remove('unread');
+                this.renderConversationList(whatsappContainer, platformBuckets.whatsapp, 'whatsapp');
+                this.renderConversationList(facebookContainer, platformBuckets.facebook, 'facebook');
+            }
 
-                // Update conversation data
-                this.currentConversation = threadElement.dataset.conversationId;
-                const userName = threadElement.querySelector('.thread-name').textContent;
-                const platform = threadElement.querySelector('.platform-icon').classList.contains('bi-whatsapp') ? 'whatsapp' : 'facebook';
+            renderConversationList(container, conversations, platform) {
+                if (!conversations.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'thread-empty';
+                    empty.textContent = platform === 'whatsapp'
+                        ? 'No WhatsApp conversations yet.'
+                        : 'No Facebook conversations yet.';
+                    container.appendChild(empty);
+                    return;
+                }
 
-                // Update chat header
-                document.querySelector('.user-name').textContent = userName;
-                this.updatePlatformIndicator(platform);
+                conversations.forEach(conversation => {
+                    const thread = document.createElement('div');
+                    const isUnread = Number(conversation.unread_count || 0) > 0;
+                    thread.className = `chat-thread ${isUnread ? 'unread' : ''}`;
+                    thread.dataset.conversationId = conversation.id;
 
-                // Hide empty state, show chat
+                    const name = conversation.visitor_name || conversation.visitor_phone || 'Unknown';
+                    const latest = conversation.latest_message;
+                    const preview = latest ? latest.message : 'No messages yet';
+                    const time = conversation.last_message_at || (latest ? latest.created_at : null);
+
+                    thread.innerHTML = `
+                        <div class="thread-avatar ${platform}-avatar">
+                            <i class="bi bi-person-fill"></i>
+                        </div>
+                        <div class="thread-content">
+                            <div class="thread-header">
+                                <h6 class="thread-name">${this.escapeHtml(name)}</h6>
+                                <span class="thread-time">${this.formatTimeAgo(time)}</span>
+                            </div>
+                            <p class="thread-message">${this.escapeHtml(preview)}</p>
+                            <div class="thread-indicators">
+                                <span class="status-badge ${isUnread ? 'unread' : 'active'}">${isUnread ? 'Unread' : 'Active'}</span>
+                                <i class="bi ${platform === 'whatsapp' ? 'bi-whatsapp' : 'bi-facebook'} platform-icon"></i>
+                            </div>
+                        </div>
+                    `;
+
+                    thread.addEventListener('click', () => this.selectConversationById(conversation.id));
+                    container.appendChild(thread);
+                });
+            }
+
+            async selectConversationById(conversationId) {
+                const conversation = this.conversations.find(item => Number(item.id) === Number(conversationId));
+                if (!conversation) {
+                    return;
+                }
+
+                this.currentConversationId = conversation.id;
+                this.setActiveThread(conversation.id);
+
+                document.querySelector('.user-name').textContent = conversation.visitor_name || conversation.visitor_phone || 'Unknown';
+                document.getElementById('userPhone').textContent = conversation.visitor_phone || 'No phone';
+                this.updatePlatformIndicator(conversation.platform);
+
                 document.getElementById('emptyChatState').style.display = 'none';
                 document.querySelector('.chat-interface').style.display = 'flex';
+                this.setComposeEnabled(true);
 
-                // Load conversation messages
-                this.loadConversationMessages(this.currentConversation);
+                await this.loadConversationMessages(conversation.id);
+                await this.markConversationRead(conversation.id);
+            }
+
+            setActiveThread(conversationId) {
+                document.querySelectorAll('.chat-thread').forEach(thread => {
+                    thread.classList.toggle('active', Number(thread.dataset.conversationId) === Number(conversationId));
+                });
             }
 
             updatePlatformIndicator(platform) {
@@ -406,7 +474,20 @@
                 const icon = indicator.querySelector('i');
                 icon.className = platform === 'whatsapp' ? 'bi bi-whatsapp' : 'bi bi-facebook';
 
-                indicator.querySelector('span').textContent = platform === 'whatsapp' ? 'WhatsApp' : 'Facebook';
+                indicator.querySelector('.platform-label').textContent = platform === 'whatsapp' ? 'WhatsApp' : 'Facebook';
+            }
+
+            switchPlatform(platform) {
+                document.querySelectorAll('.platform-tab').forEach(tab => {
+                    tab.classList.toggle('active', tab.dataset.platform === platform);
+                });
+
+                document.querySelectorAll('.thread-container').forEach(container => {
+                    container.classList.toggle('active', container.id === `${platform}-threads`);
+                });
+
+                this.currentPlatform = platform;
+                this.updatePlatformIndicator(platform);
             }
 
             searchConversations(query) {
@@ -428,37 +509,276 @@
                 });
             }
 
-            sendMessage() {
+            async loadConversationMessages(conversationId) {
+                try {
+                    const response = await fetch(`/admin/api/conversations/${conversationId}/messages`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to load messages');
+                    }
+
+                    const data = await response.json();
+                    this.renderMessages(data.messages || []);
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+
+            renderMessages(messages) {
+                const container = document.getElementById('messagesContainer');
+                container.innerHTML = '';
+
+                if (!messages.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'messages-empty';
+                    empty.textContent = 'No messages yet.';
+                    container.appendChild(empty);
+                    return;
+                }
+
+                messages.forEach(message => {
+                    const messageGroup = document.createElement('div');
+                    const isAdmin = message.sender_type === 'admin';
+                    const messageText = message.message || '';
+                    messageGroup.className = 'message-group';
+                    messageGroup.innerHTML = `
+                        <div class="message ${isAdmin ? 'sent' : 'received'}">
+                            <div class="message-content">
+                                <p>${this.escapeHtml(messageText)}</p>
+                                <span class="message-time">${this.formatMessageTime(message.created_at)}</span>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(messageGroup);
+                });
+
+                this.scrollToBottom();
+            }
+
+            async sendMessage() {
+                if (!this.currentConversationId) {
+                    return;
+                }
+
+                const messageType = document.getElementById('messageTypeSelect').value;
+                const templateName = document.getElementById('templateNameInput').value.trim();
                 const input = document.getElementById('messageInput');
                 const message = input.value.trim();
+                const payload = { message_type: messageType };
 
-                if (!message) return;
+                if (messageType === 'template') {
+                    if (!templateName) {
+                        alert('Template name is required.');
+                        return;
+                    }
+                    payload.template_name = templateName;
+                } else {
+                    if (!message) {
+                        return;
+                    }
+                    payload.message = message;
+                }
 
-                // Create message element
-                const messageGroup = document.createElement('div');
-                messageGroup.className = 'message-group';
-                messageGroup.innerHTML = `
-                    <div class="message sent">
-                        <div class="message-content">
-                            <p>${message}</p>
-                            <span class="message-time">${this.getCurrentTime()}</span>
-                        </div>
-                    </div>
-                `;
+                try {
+                    const response = await fetch(`/admin/api/conversations/${this.currentConversationId}/messages`, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': this.csrfToken
+                        },
+                        body: JSON.stringify(payload)
+                    });
 
-                // Add to messages container
-                const container = document.getElementById('messagesContainer');
-                container.appendChild(messageGroup);
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || 'Failed to send message.');
+                    }
 
-                // Clear input
-                input.value = '';
-                input.style.height = 'auto';
+                    if (messageType === 'text') {
+                        input.value = '';
+                        input.style.height = 'auto';
+                    } else {
+                        document.getElementById('templateNameInput').value = '';
+                    }
 
-                // Scroll to bottom
-                this.scrollToBottom();
+                    await this.loadConversations(this.currentConversationId);
+                } catch (error) {
+                    alert(error.message);
+                }
+            }
 
-                // Simulate typing indicator
-                this.showTypingIndicator();
+            async markConversationRead(conversationId) {
+                try {
+                    await fetch(`/admin/api/conversations/${conversationId}/mark-read`, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': this.csrfToken
+                        }
+                    });
+                } catch (error) {
+                    console.error(error);
+                }
+
+                const conversation = this.conversations.find(item => Number(item.id) === Number(conversationId));
+                if (conversation) {
+                    conversation.unread_count = 0;
+                    this.renderConversations();
+                    this.updatePlatformBadges();
+                    this.setActiveThread(conversationId);
+                }
+            }
+
+            async sendNewWhatsApp(event) {
+                event.preventDefault();
+                
+                const errorBox = document.getElementById('newWhatsAppError');
+                const successBox = document.getElementById('newWhatsAppSuccess');
+                const btnText = document.getElementById('btnText');
+                const btnSpinner = document.getElementById('btnSpinner');
+                const submitBtn = document.getElementById('startConversationBtn');
+                
+                // Reset alerts
+                errorBox.classList.add('d-none');
+                successBox.classList.add('d-none');
+                errorBox.textContent = '';
+                successBox.textContent = '';
+
+                const phoneNumber = document.getElementById('newWhatsAppNumber').value.trim();
+                const messageType = document.getElementById('newMessageType').value;
+                const templateName = document.getElementById('newTemplateName').value.trim();
+                const textMessage = document.getElementById('newWhatsAppInitialMessage').value.trim();
+
+                if (!phoneNumber) {
+                    return this.showNewWhatsAppError('Phone number is required.');
+                }
+
+                if (messageType === 'template' && !templateName) {
+                    return this.showNewWhatsAppError('Template name is required.');
+                }
+
+                if (messageType === 'text' && !textMessage) {
+                    return this.showNewWhatsAppError('Message is required for text type.');
+                }
+
+                // Disable button and show spinner
+                submitBtn.disabled = true;
+                btnSpinner.classList.remove('d-none');
+                btnText.textContent = 'Validating...';
+
+                try {
+                    // Step 1: Validate the WhatsApp number
+                    const validateResponse = await fetch('/admin/api/whatsapp/validate', {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': this.csrfToken
+                        },
+                        body: JSON.stringify({ phone_number: phoneNumber })
+                    });
+
+                    const validateData = await validateResponse.json();
+
+                    if (!validateResponse.ok || !validateData.exists) {
+                        throw new Error(validateData.message || 'Invalid WhatsApp number.');
+                    }
+
+                    // Show success for validation
+                    successBox.textContent = 'Number validated! Starting conversation...';
+                    successBox.classList.remove('d-none');
+                    btnText.textContent = 'Starting...';
+
+                    // Step 2: Start the conversation
+                    const payload = {
+                        phone_number: phoneNumber,
+                        message_type: messageType
+                    };
+
+                    if (messageType === 'template') {
+                        payload.template_name = templateName;
+                    } else {
+                        payload.initial_message = textMessage;
+                    }
+
+                    const startResponse = await fetch('/admin/api/conversations/start', {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': this.csrfToken
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const startData = await startResponse.json();
+
+                    if (!startResponse.ok || !startData.success) {
+                        throw new Error(startData.message || 'Failed to start conversation.');
+                    }
+
+                    // Success! Show message and close modal
+                    const msgType = messageType === 'template' ? 'Template' : 'Message';
+                    successBox.textContent = `${msgType} sent successfully! Conversation started.`;
+                    btnText.textContent = 'Success!';
+
+                    // Close modal after a brief delay
+                    setTimeout(() => {
+                        this.modal.hide();
+                        this.clearNewWhatsAppForm();
+                        
+                        // Reload conversations and select the new one
+                        this.loadConversations(startData.conversation.id);
+                    }, 1500);
+
+                } catch (error) {
+                    this.showNewWhatsAppError(error.message);
+                    btnText.textContent = 'Start Conversation';
+                } finally {
+                    // Re-enable button and hide spinner
+                    submitBtn.disabled = false;
+                    btnSpinner.classList.add('d-none');
+                }
+            }
+
+            showNewWhatsAppError(message) {
+                const errorBox = document.getElementById('newWhatsAppError');
+                errorBox.textContent = message;
+                errorBox.classList.remove('d-none');
+            }
+
+            clearNewWhatsAppForm() {
+                document.getElementById('newWhatsAppForm').reset();
+                document.getElementById('newWhatsAppError').classList.add('d-none');
+                document.getElementById('newWhatsAppSuccess').classList.add('d-none');
+                document.getElementById('btnText').textContent = 'Start Conversation';
+                document.getElementById('btnSpinner').classList.add('d-none');
+                document.getElementById('startConversationBtn').disabled = false;
+                document.getElementById('newTemplateName').value = 'hello_world';
+                this.toggleNewMessageType();
+            }
+
+            toggleNewMessageType() {
+                const messageType = document.getElementById('newMessageType').value;
+                const templateSection = document.getElementById('templateSection');
+                const textSection = document.getElementById('textMessageSection');
+
+                if (messageType === 'template') {
+                    templateSection.classList.remove('d-none');
+                    textSection.classList.add('d-none');
+                } else {
+                    templateSection.classList.add('d-none');
+                    textSection.classList.remove('d-none');
+                }
+            }
+
+            toggleMessageType() {
+                const messageType = document.getElementById('messageTypeSelect').value;
+                const templateInput = document.getElementById('templateNameInput');
+                templateInput.style.display = messageType === 'template' ? 'block' : 'none';
             }
 
             insertQuickReply(text) {
@@ -475,44 +795,98 @@
                 });
             }
 
+            setComposeEnabled(enabled) {
+                document.getElementById('messageInput').disabled = !enabled;
+                document.getElementById('sendBtn').disabled = !enabled;
+                document.getElementById('messageTypeSelect').disabled = !enabled;
+                document.getElementById('templateNameInput').disabled = !enabled;
+            }
+
+            showEmptyState() {
+                document.querySelector('.chat-interface').style.display = 'none';
+                document.getElementById('emptyChatState').style.display = 'flex';
+                this.setComposeEnabled(false);
+            }
+
             scrollToBottom() {
                 const container = document.getElementById('messagesContainer');
                 container.scrollTop = container.scrollHeight;
             }
 
-            getCurrentTime() {
-                return new Date().toLocaleTimeString('en-US', {
+            updatePlatformBadges() {
+                const whatsappCount = this.conversations
+                    .filter(conv => conv.platform === 'whatsapp')
+                    .reduce((sum, conv) => sum + Number(conv.unread_count || 0), 0);
+                const facebookCount = this.conversations
+                    .filter(conv => conv.platform === 'facebook')
+                    .reduce((sum, conv) => sum + Number(conv.unread_count || 0), 0);
+
+                const whatsappBadge = document.querySelector('.platform-tab[data-platform=\"whatsapp\"] .badge');
+                const facebookBadge = document.querySelector('.platform-tab[data-platform=\"facebook\"] .badge');
+                if (whatsappBadge) {
+                    whatsappBadge.textContent = whatsappCount;
+                }
+                if (facebookBadge) {
+                    facebookBadge.textContent = facebookCount;
+                }
+            }
+
+            formatTimeAgo(timestamp) {
+                if (!timestamp) {
+                    return '';
+                }
+
+                const date = new Date(this.normalizeTimestamp(timestamp));
+                const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+                if (Number.isNaN(seconds) || seconds < 0) {
+                    return '';
+                }
+
+                if (seconds < 60) {
+                    return `${seconds}s ago`;
+                }
+                const minutes = Math.floor(seconds / 60);
+                if (minutes < 60) {
+                    return `${minutes}m ago`;
+                }
+                const hours = Math.floor(minutes / 60);
+                if (hours < 24) {
+                    return `${hours}h ago`;
+                }
+                const days = Math.floor(hours / 24);
+                return `${days}d ago`;
+            }
+
+            formatMessageTime(timestamp) {
+                if (!timestamp) {
+                    return '';
+                }
+                const date = new Date(this.normalizeTimestamp(timestamp));
+                return date.toLocaleTimeString('en-US', {
                     hour: 'numeric',
                     minute: '2-digit',
                     hour12: true
                 });
             }
 
-            showTypingIndicator() {
-                const indicator = document.querySelector('.typing-indicator');
-                indicator.style.display = 'flex';
-
-                setTimeout(() => {
-                    indicator.style.display = 'none';
-                }, 3000);
-            }
-
-            loadInitialConversation() {
-                // Select first conversation by default
-                const firstThread = document.querySelector('.chat-thread');
-                if (firstThread) {
-                    this.selectConversation(firstThread);
+            normalizeTimestamp(timestamp) {
+                const value = String(timestamp);
+                if (value.includes('T')) {
+                    return value;
                 }
+                return value.replace(' ', 'T');
             }
 
-            loadConversationMessages(conversationId) {
-                // Here you would typically make an AJAX call to load messages
-                // For now, we'll keep the existing sample messages
-                console.log(`Loading messages for conversation: ${conversationId}`);
+            escapeHtml(value) {
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/\"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
             }
         }
 
-        // Initialize the application when DOM is loaded
         document.addEventListener('DOMContentLoaded', function() {
             window.connectDeskApp = new ConnectDeskApp();
         });

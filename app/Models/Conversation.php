@@ -9,8 +9,10 @@ class Conversation extends Model
     protected $fillable = [
         'visitor_name',
         'visitor_email',
+        'visitor_phone',
         'visitor_id',
         'platform',
+        'user_id',
         'unread_count',
         'last_message_at',
     ];
@@ -27,5 +29,10 @@ class Conversation extends Model
     public function latestMessage()
     {
         return $this->hasOne(Message::class)->latestOfMany();
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }
