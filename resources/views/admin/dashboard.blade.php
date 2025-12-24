@@ -241,15 +241,60 @@
                     </div>
                     
                     <form id="newWhatsAppForm">
-                        <div class="mb-3">
+                        <div class="recipient-mode-card">
+                            <div class="recipient-mode-header">
+                                <div>
+                                    <label class="form-label fw-semibold mb-1">Recipients</label>
+                                    <p class="text-muted small mb-0">Send to a single number or multiple recipients at once.</p>
+                                </div>
+                                <div class="recipient-mode-toggle btn-group" role="group" aria-label="Recipient mode">
+                                    <input type="radio" class="btn-check" name="recipientMode" id="recipientModeSingle" autocomplete="off" checked>
+                                    <label class="btn btn-outline-primary btn-sm" for="recipientModeSingle">Single</label>
+                                    <input type="radio" class="btn-check" name="recipientMode" id="recipientModeBulk" autocomplete="off">
+                                    <label class="btn btn-outline-primary btn-sm" for="recipientModeBulk">Multiple</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="recipient-section mb-3" id="singleRecipientSection">
                             <label class="form-label fw-semibold">WhatsApp Number</label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-telephone"></i></span>
-                                <input type="text" class="form-control" id="newWhatsAppNumber" 
-                                    placeholder="e.g., 8801XXXXXXXXX or 01XXXXXXXXX" required>
+                                <input type="text" class="form-control" id="newWhatsAppNumber"
+                                    placeholder="e.g., 8801XXXXXXXXX or 01XXXXXXXXX">
                             </div>
                             <small class="form-text text-muted">
                                 Enter with country code (e.g., 8801XXXXXXXXX) or without (e.g., 01XXXXXXXXX)
+                            </small>
+                        </div>
+
+                        <div class="recipient-section mb-3 d-none" id="bulkRecipientSection">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label fw-semibold mb-0">WhatsApp Numbers</label>
+                                <span class="bulk-count-badge" id="bulkCountBadge">0 numbers</span>
+                            </div>
+                            <textarea class="form-control bulk-input" id="bulkWhatsAppNumbers" rows="4"
+                                placeholder="Paste numbers separated by comma, space, or new line."></textarea>
+                            <div class="bulk-actions">
+                                <div class="bulk-actions-left">
+                                    <label class="btn btn-outline-secondary btn-sm mb-0">
+                                        <i class="bi bi-upload me-1"></i>Upload CSV
+                                        <input type="file" id="bulkUploadInput" accept=".csv,.txt" hidden>
+                                    </label>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="bulkClearBtn">
+                                        <i class="bi bi-x-circle me-1"></i>Clear
+                                    </button>
+                                </div>
+                                <span class="text-muted small">Max 50 numbers per batch.</span>
+                            </div>
+                            <div class="bulk-preview" id="bulkPreview">
+                                <div class="bulk-preview-title">Preview</div>
+                                <div class="bulk-preview-list" id="bulkPreviewList">
+                                    <span class="text-muted small">Add numbers to see a preview.</span>
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">
+                                A separate conversation will be created for each recipient.
                             </small>
                         </div>
 
@@ -306,6 +351,7 @@
                 this.conversations = [];
                 this.csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                 this.modal = new bootstrap.Modal(document.getElementById('newWhatsAppModal'));
+                this.bulkLimit = 50;
                 this.initializeApp();
             }
 
@@ -313,6 +359,8 @@
                 this.setupEventListeners();
                 this.autoResizeTextarea();
                 this.toggleMessageType();
+                this.toggleRecipientMode();
+                this.updateBulkRecipientStats();
                 this.loadConversations();
             }
 
@@ -347,6 +395,11 @@
                 });
                 document.getElementById('newMessageType').addEventListener('change', () => this.toggleNewMessageType());
                 document.getElementById('newWhatsAppForm').addEventListener('submit', (e) => this.sendNewWhatsApp(e));
+                document.getElementById('recipientModeSingle').addEventListener('change', () => this.toggleRecipientMode());
+                document.getElementById('recipientModeBulk').addEventListener('change', () => this.toggleRecipientMode());
+                document.getElementById('bulkWhatsAppNumbers').addEventListener('input', () => this.updateBulkRecipientStats());
+                document.getElementById('bulkClearBtn').addEventListener('click', () => this.clearBulkRecipients());
+                document.getElementById('bulkUploadInput').addEventListener('change', (e) => this.handleBulkUpload(e));
 
                 this.setComposeEnabled(false);
             }
@@ -632,6 +685,147 @@
                 }
             }
 
+            getRecipientMode() {
+                return document.getElementById('recipientModeBulk').checked ? 'bulk' : 'single';
+            }
+
+            getSubmitButtonLabel() {
+                return this.getRecipientMode() === 'bulk' ? 'Send to Multiple' : 'Start Conversation';
+            }
+
+            toggleRecipientMode() {
+                const isBulk = this.getRecipientMode() === 'bulk';
+                document.getElementById('singleRecipientSection').classList.toggle('d-none', isBulk);
+                document.getElementById('bulkRecipientSection').classList.toggle('d-none', !isBulk);
+                document.getElementById('btnText').textContent = this.getSubmitButtonLabel();
+                this.updateBulkRecipientStats();
+            }
+
+            parseRecipientNumbers(value) {
+                if (!value) {
+                    return [];
+                }
+
+                const tokens = value.split(/[\s,;]+/);
+                const uniqueNumbers = [];
+                const seen = new Set();
+
+                tokens.forEach(token => {
+                    const trimmed = token.trim();
+                    if (!trimmed) {
+                        return;
+                    }
+                    const hasPlus = trimmed.startsWith('+');
+                    const digits = trimmed.replace(/[^\d]/g, '');
+                    if (!digits) {
+                        return;
+                    }
+                    const normalized = hasPlus ? `+${digits}` : digits;
+                    if (!seen.has(normalized)) {
+                        seen.add(normalized);
+                        uniqueNumbers.push(normalized);
+                    }
+                });
+
+                return uniqueNumbers;
+            }
+
+            getBulkRecipientNumbers() {
+                const input = document.getElementById('bulkWhatsAppNumbers');
+                return this.parseRecipientNumbers(input.value);
+            }
+
+            updateBulkRecipientStats() {
+                const numbers = this.getBulkRecipientNumbers();
+                const badge = document.getElementById('bulkCountBadge');
+                const previewList = document.getElementById('bulkPreviewList');
+
+                badge.textContent = `${numbers.length} ${numbers.length === 1 ? 'number' : 'numbers'}`;
+                previewList.innerHTML = '';
+
+                if (!numbers.length) {
+                    previewList.innerHTML = '<span class="text-muted small">Add numbers to see a preview.</span>';
+                    return;
+                }
+
+                numbers.slice(0, 6).forEach(number => {
+                    const chip = document.createElement('span');
+                    chip.className = 'bulk-chip';
+                    chip.textContent = number;
+                    previewList.appendChild(chip);
+                });
+
+                if (numbers.length > 6) {
+                    const more = document.createElement('span');
+                    more.className = 'bulk-chip bulk-chip-muted';
+                    more.textContent = `+${numbers.length - 6} more`;
+                    previewList.appendChild(more);
+                }
+            }
+
+            clearBulkRecipients() {
+                document.getElementById('bulkWhatsAppNumbers').value = '';
+                this.updateBulkRecipientStats();
+            }
+
+            handleBulkUpload(event) {
+                const file = event.target.files[0];
+                if (!file) {
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const input = document.getElementById('bulkWhatsAppNumbers');
+                    const existing = input.value.trim();
+                    const incoming = String(reader.result || '').trim();
+                    input.value = existing ? `${existing}\n${incoming}` : incoming;
+                    this.updateBulkRecipientStats();
+                };
+                reader.readAsText(file);
+                event.target.value = '';
+            }
+
+            async validateWhatsAppNumber(phoneNumber) {
+                const validateResponse = await fetch('/admin/api/whatsapp/validate', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken
+                    },
+                    body: JSON.stringify({ phone_number: phoneNumber })
+                });
+
+                const validateData = await validateResponse.json();
+
+                if (!validateResponse.ok || !validateData.exists) {
+                    throw new Error(validateData.message || 'Invalid WhatsApp number.');
+                }
+
+                return validateData;
+            }
+
+            async startWhatsAppConversation(payload) {
+                const startResponse = await fetch('/admin/api/conversations/start', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': this.csrfToken
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const startData = await startResponse.json();
+
+                if (!startResponse.ok || !startData.success) {
+                    throw new Error(startData.message || 'Failed to start conversation.');
+                }
+
+                return startData;
+            }
+
             async sendNewWhatsApp(event) {
                 event.preventDefault();
                 
@@ -647,13 +841,24 @@
                 errorBox.textContent = '';
                 successBox.textContent = '';
 
+                const recipientMode = this.getRecipientMode();
                 const phoneNumber = document.getElementById('newWhatsAppNumber').value.trim();
+                const bulkNumbers = this.getBulkRecipientNumbers();
                 const messageType = document.getElementById('newMessageType').value;
                 const templateName = document.getElementById('newTemplateName').value.trim();
                 const textMessage = document.getElementById('newWhatsAppInitialMessage').value.trim();
 
-                if (!phoneNumber) {
+                if (recipientMode === 'single' && !phoneNumber) {
                     return this.showNewWhatsAppError('Phone number is required.');
+                }
+
+                if (recipientMode === 'bulk') {
+                    if (!bulkNumbers.length) {
+                        return this.showNewWhatsAppError('At least one phone number is required.');
+                    }
+                    if (bulkNumbers.length > this.bulkLimit) {
+                        return this.showNewWhatsAppError(`You can send to a maximum of ${this.bulkLimit} numbers at once.`);
+                    }
                 }
 
                 if (messageType === 'template' && !templateName) {
@@ -667,76 +872,110 @@
                 // Disable button and show spinner
                 submitBtn.disabled = true;
                 btnSpinner.classList.remove('d-none');
-                btnText.textContent = 'Validating...';
+                btnText.textContent = recipientMode === 'bulk' ? 'Preparing...' : 'Validating...';
 
                 try {
-                    // Step 1: Validate the WhatsApp number
-                    const validateResponse = await fetch('/admin/api/whatsapp/validate', {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': this.csrfToken
-                        },
-                        body: JSON.stringify({ phone_number: phoneNumber })
-                    });
+                    if (recipientMode === 'single') {
+                        await this.validateWhatsAppNumber(phoneNumber);
 
-                    const validateData = await validateResponse.json();
+                        successBox.textContent = 'Number validated! Starting conversation...';
+                        successBox.classList.remove('d-none');
+                        btnText.textContent = 'Starting...';
 
-                    if (!validateResponse.ok || !validateData.exists) {
-                        throw new Error(validateData.message || 'Invalid WhatsApp number.');
+                        const payload = {
+                            phone_number: phoneNumber,
+                            message_type: messageType
+                        };
+
+                        if (messageType === 'template') {
+                            payload.template_name = templateName;
+                        } else {
+                            payload.initial_message = textMessage;
+                        }
+
+                        const startData = await this.startWhatsAppConversation(payload);
+
+                        const msgType = messageType === 'template' ? 'Template' : 'Message';
+                        successBox.textContent = `${msgType} sent successfully! Conversation started.`;
+                        btnText.textContent = 'Success!';
+
+                        setTimeout(() => {
+                            this.modal.hide();
+                            this.clearNewWhatsAppForm();
+                            this.loadConversations(startData.conversation.id);
+                        }, 1500);
+                        return;
                     }
 
-                    // Show success for validation
-                    successBox.textContent = 'Number validated! Starting conversation...';
+                    successBox.textContent = `Sending to ${bulkNumbers.length} recipients...`;
                     successBox.classList.remove('d-none');
-                    btnText.textContent = 'Starting...';
 
-                    // Step 2: Start the conversation
-                    const payload = {
-                        phone_number: phoneNumber,
-                        message_type: messageType
-                    };
+                    let sentCount = 0;
+                    let failedCount = 0;
+                    const failureSamples = [];
+                    let lastConversationId = null;
 
-                    if (messageType === 'template') {
-                        payload.template_name = templateName;
+                    for (let index = 0; index < bulkNumbers.length; index++) {
+                        const number = bulkNumbers[index];
+                        btnText.textContent = `Sending ${index + 1}/${bulkNumbers.length}`;
+
+                        try {
+                            await this.validateWhatsAppNumber(number);
+                            const payload = {
+                                phone_number: number,
+                                message_type: messageType
+                            };
+
+                            if (messageType === 'template') {
+                                payload.template_name = templateName;
+                            } else {
+                                payload.initial_message = textMessage;
+                            }
+
+                            const startData = await this.startWhatsAppConversation(payload);
+                            sentCount += 1;
+                            if (startData.conversation && startData.conversation.id) {
+                                lastConversationId = startData.conversation.id;
+                            }
+                        } catch (error) {
+                            failedCount += 1;
+                            if (failureSamples.length < 3) {
+                                failureSamples.push(`${number}: ${error.message}`);
+                            }
+                        }
+                    }
+
+                    if (sentCount > 0) {
+                        successBox.textContent = `Sent to ${sentCount} ${sentCount === 1 ? 'number' : 'numbers'}.`;
+                        successBox.classList.remove('d-none');
                     } else {
-                        payload.initial_message = textMessage;
+                        successBox.classList.add('d-none');
                     }
 
-                    const startResponse = await fetch('/admin/api/conversations/start', {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': this.csrfToken
-                        },
-                        body: JSON.stringify(payload)
-                    });
-
-                    const startData = await startResponse.json();
-
-                    if (!startResponse.ok || !startData.success) {
-                        throw new Error(startData.message || 'Failed to start conversation.');
+                    if (failedCount > 0) {
+                        let errorText = `Failed to send to ${failedCount} ${failedCount === 1 ? 'number' : 'numbers'}.`;
+                        if (failureSamples.length) {
+                            errorText += ` Examples: ${failureSamples.join(' | ')}`;
+                        }
+                        this.showNewWhatsAppError(errorText);
                     }
 
-                    // Success! Show message and close modal
-                    const msgType = messageType === 'template' ? 'Template' : 'Message';
-                    successBox.textContent = `${msgType} sent successfully! Conversation started.`;
-                    btnText.textContent = 'Success!';
+                    btnText.textContent = this.getSubmitButtonLabel();
 
-                    // Close modal after a brief delay
-                    setTimeout(() => {
-                        this.modal.hide();
-                        this.clearNewWhatsAppForm();
-                        
-                        // Reload conversations and select the new one
-                        this.loadConversations(startData.conversation.id);
-                    }, 1500);
-
+                    if (sentCount > 0) {
+                        if (failedCount === 0) {
+                            setTimeout(() => {
+                                this.modal.hide();
+                                this.clearNewWhatsAppForm();
+                                this.loadConversations(lastConversationId);
+                            }, 1500);
+                        } else {
+                            this.loadConversations(lastConversationId);
+                        }
+                    }
                 } catch (error) {
                     this.showNewWhatsAppError(error.message);
-                    btnText.textContent = 'Start Conversation';
+                    btnText.textContent = this.getSubmitButtonLabel();
                 } finally {
                     // Re-enable button and hide spinner
                     submitBtn.disabled = false;
@@ -754,11 +993,15 @@
                 document.getElementById('newWhatsAppForm').reset();
                 document.getElementById('newWhatsAppError').classList.add('d-none');
                 document.getElementById('newWhatsAppSuccess').classList.add('d-none');
-                document.getElementById('btnText').textContent = 'Start Conversation';
+                document.getElementById('recipientModeSingle').checked = true;
+                document.getElementById('btnText').textContent = this.getSubmitButtonLabel();
                 document.getElementById('btnSpinner').classList.add('d-none');
                 document.getElementById('startConversationBtn').disabled = false;
                 document.getElementById('newTemplateName').value = 'hello_world';
                 this.toggleNewMessageType();
+                this.clearBulkRecipients();
+                document.getElementById('bulkUploadInput').value = '';
+                this.toggleRecipientMode();
             }
 
             toggleNewMessageType() {
