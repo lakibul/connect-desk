@@ -14,14 +14,16 @@ class AdminUserSeeder extends Seeder
      */
     public function run(): void
     {
-        User::create([
-            'name' => 'Admin User',
-            'email' => 'admin@connectdesk.com',
-            'password' => Hash::make('password'),
-            'role' => 'admin',
-        ]);
+        User::updateOrCreate(
+            ['email' => 'admin@connectdesk.com'],
+            [
+                'name' => 'Admin User',
+                'password' => Hash::make('password'),
+                'role' => 'admin',
+            ]
+        );
 
-        echo "Admin user created successfully!\n";
+        echo "Admin user created/updated successfully!\n";
         echo "Email: admin@connectdesk.com\n";
         echo "Password: password\n";
     }

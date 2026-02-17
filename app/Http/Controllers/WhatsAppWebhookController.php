@@ -50,98 +50,137 @@ class WhatsAppWebhookController extends Controller
     }
 
     /**
-     * Handle incoming webhook messages
+     * Handle incoming Twilio WhatsApp webhook messages
      */
     public function handleWebhook(Request $request)
     {
         try {
-            Log::info('Received WhatsApp webhook', [
-                'body' => $request->all()
+            Log::info('Received Twilio WhatsApp webhook', [
+                'all_data' => $request->all()
             ]);
 
-            // Get the webhook body
-            $body = $request->all();
+            // Twilio sends data as form data, not JSON
+            $messageSid = $request->input('MessageSid');
+            $from = $request->input('From'); // Format: whatsapp:+8801XXXXXXXXX
+            $to = $request->input('To'); // Format: whatsapp:+14155238886
+            $body = $request->input('Body');
+            $numMedia = (int) $request->input('NumMedia', 0);
+            $profileName = $request->input('ProfileName');
 
-            // Check if it's a WhatsApp webhook event
-            if (isset($body['object']) && $body['object'] === 'whatsapp_business_account') {
+            Log::info('Twilio WhatsApp message received', [
+                'message_sid' => $messageSid,
+                'from' => $from,
+                'to' => $to,
+                'body' => $body,
+                'num_media' => $numMedia,
+                'profile_name' => $profileName,
+            ]);
 
-                // Loop through entries (there might be multiple)
-                foreach ($body['entry'] ?? [] as $entry) {
-                    foreach ($entry['changes'] ?? [] as $change) {
+            // Extract phone number from whatsapp: prefix
+            $senderPhone = str_replace('whatsapp:', '', $from);
+            $senderPhone = ltrim($senderPhone, '+'); // Remove + for consistency
 
-                        // Get the message data
-                        $value = $change['value'] ?? [];
-                        $messages = $value['messages'] ?? [];
-                        $contacts = $value['contacts'] ?? [];
-                        $contactName = $contacts[0]['profile']['name'] ?? null;
+            if (empty($senderPhone)) {
+                Log::warning('Twilio webhook: sender phone is empty');
+                return response('Bad Request', 400);
+            }
 
-                        foreach ($messages as $message) {
-                            $from = $message['from'] ?? '';
-                            $messageId = $message['id'] ?? '';
-                            $timestamp = $message['timestamp'] ?? '';
-                            $text = $message['text']['body'] ?? '';
-                            $type = $message['type'] ?? '';
+            // Find or create conversation
+            // First try to find existing conversation by phone number (created by admin)
+            $conversation = Conversation::where('visitor_phone', $senderPhone)
+                ->where('platform', 'whatsapp')
+                ->first();
 
-                            Log::info('WhatsApp message received', [
-                                'from' => $from,
-                                'message_id' => $messageId,
-                                'type' => $type,
-                                'text' => $text,
-                                'timestamp' => $timestamp
-                            ]);
+            // If not found, try by visitor_id
+            if (!$conversation) {
+                $conversation = Conversation::where('visitor_id', 'whatsapp_' . $senderPhone)
+                    ->where('platform', 'whatsapp')
+                    ->first();
+            }
 
-                            if (empty($from)) {
-                                continue;
-                            }
+            // If still not found, create new conversation
+            if (!$conversation) {
+                $conversation = Conversation::create([
+                    'visitor_id' => 'whatsapp_' . $senderPhone,
+                    'visitor_name' => $profileName ?: $senderPhone,
+                    'visitor_phone' => $senderPhone,
+                    'platform' => 'whatsapp',
+                    'unread_count' => 0,
+                ]);
+            } else {
+                // Update visitor info if not set
+                if (empty($conversation->visitor_phone)) {
+                    $conversation->visitor_phone = $senderPhone;
+                }
+                if (empty($conversation->visitor_name) && !empty($profileName)) {
+                    $conversation->visitor_name = $profileName;
+                }
+                if (empty($conversation->visitor_id)) {
+                    $conversation->visitor_id = 'whatsapp_' . $senderPhone;
+                }
+            }
 
-                            $conversation = Conversation::firstOrCreate(
-                                ['visitor_id' => 'whatsapp_' . $from, 'platform' => 'whatsapp'],
-                                [
-                                    'visitor_name' => $contactName ?: $from,
-                                    'visitor_phone' => $from,
-                                    'unread_count' => 0,
-                                ]
-                            );
+            // Handle message body
+            $messageBody = $body;
 
-                            $messageBody = $text;
-                            if (empty($messageBody)) {
-                                $messageBody = $type ? strtoupper($type) . ' message received' : 'Message received';
-                            }
-
-                            Message::create([
-                                'conversation_id' => $conversation->id,
-                                'message' => $messageBody,
-                                'sender_type' => 'visitor',
-                                'platform' => 'whatsapp',
-                                'is_read' => false,
-                            ]);
-
-                            $conversation->update([
-                                'visitor_phone' => $conversation->visitor_phone ?: $from,
-                                'visitor_name' => $conversation->visitor_name ?: ($contactName ?: $from),
-                                'last_message_at' => now(),
-                                'unread_count' => $conversation->unread_count + 1,
-                            ]);
-                        }
+            // If there's media, log it (you can download and store media later)
+            if ($numMedia > 0) {
+                $mediaUrls = [];
+                for ($i = 0; $i < $numMedia; $i++) {
+                    $mediaUrl = $request->input("MediaUrl{$i}");
+                    $mediaContentType = $request->input("MediaContentType{$i}");
+                    if ($mediaUrl) {
+                        $mediaUrls[] = [
+                            'url' => $mediaUrl,
+                            'type' => $mediaContentType,
+                        ];
                     }
                 }
 
-                return response()->json(['status' => 'ok'], 200);
+                Log::info('Twilio message contains media', [
+                    'message_sid' => $messageSid,
+                    'media_count' => $numMedia,
+                    'media_urls' => $mediaUrls,
+                ]);
+
+                // Append media info to message body
+                if (empty($messageBody)) {
+                    $messageBody = "[Media message received]";
+                } else {
+                    $messageBody .= "\n[Contains {$numMedia} media file(s)]";
+                }
             }
 
-            Log::warning('Unknown webhook event type', [
-                'object' => $body['object'] ?? 'unknown'
+            if (empty($messageBody)) {
+                $messageBody = 'Message received';
+            }
+
+            // Store the message
+            Message::create([
+                'conversation_id' => $conversation->id,
+                'message' => $messageBody,
+                'sender_type' => 'visitor',
+                'platform' => 'whatsapp',
+                'is_read' => false,
             ]);
 
-            return response()->json(['status' => 'ignored'], 200);
+            // Update conversation (save changes from above)
+            $conversation->last_message_at = now();
+            $conversation->unread_count = $conversation->unread_count + 1;
+            $conversation->save();
+
+            // Twilio expects an XML response (TwiML)
+            return response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200)
+                ->header('Content-Type', 'text/xml');
 
         } catch (\Exception $e) {
-            Log::error('Error processing webhook', [
+            Log::error('Error processing Twilio webhook', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            return response()->json(['status' => 'error'], 500);
+            return response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200)
+                ->header('Content-Type', 'text/xml');
         }
     }
 }

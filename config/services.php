@@ -43,4 +43,11 @@ return [
         'target_phone_number' => env('WHATSAPP_TARGET_PHONE_NUMBER', '8801604509006'),
     ],
 
+    'twilio' => [
+        'account_sid' => env('TWILIO_ACCOUNT_SID'),
+        'auth_token' => env('TWILIO_AUTH_TOKEN'),
+        'whatsapp_from' => env('TWILIO_WHATSAPP_FROM'),
+        'target_phone_number' => env('TWILIO_TARGET_PHONE_NUMBER'),
+    ],
+
 ];

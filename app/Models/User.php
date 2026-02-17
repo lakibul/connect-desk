@@ -20,9 +20,13 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'role',
         'phone_number',
         'whatsapp_access_token',
         'whatsapp_phone_number_id',
+        'twilio_account_sid',
+        'twilio_auth_token',
+        'twilio_whatsapp_from',
         'password',
     ];
 

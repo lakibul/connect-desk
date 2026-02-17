@@ -52,15 +52,15 @@
     <!-- Main Dashboard Container -->
     <div class="dashboard-container">
         <!-- WhatsApp Status Alert -->
-        @if(empty(auth()->user()->whatsapp_access_token) || empty(auth()->user()->whatsapp_phone_number_id))
+        @if(empty(auth()->user()->twilio_account_sid) || empty(auth()->user()->twilio_auth_token))
         <div class="alert alert-warning alert-dismissible fade show m-3" role="alert" style="border-radius: 12px;">
             <i class="bi bi-exclamation-triangle me-2"></i>
-            <strong>WhatsApp Not Connected:</strong> Configure your WhatsApp Business API credentials in 
-            <a href="{{ route('admin.settings') }}" class="alert-link">Settings</a> to send messages.
+            <strong>Twilio WhatsApp Not Connected:</strong> Configure your Twilio credentials in
+            <a href="{{ route('admin.settings') }}" class="alert-link">Settings</a> to send WhatsApp messages.
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         @endif
-        
+
         <div class="row g-0 h-100">
             <!-- Sidebar -->
             <div class="col-md-3 sidebar-container">
@@ -178,7 +178,19 @@
                                 <option value="text" selected>Text message</option>
                                 <option value="template">Template message</option>
                             </select>
-                            <input type="text" class="form-control form-control-sm" id="templateNameInput" placeholder="Template name (e.g. hello_world)" style="display: none;">
+                            <div id="templateOptionsContainer" style="display: none; gap: 8px;" class="d-flex">
+                                <select class="form-select form-select-sm" id="templateSelector" style="flex: 1;">
+                                    <option value="">-- Select Template --</option>
+                                    <option value="hello_world">👋 hello_world (Welcome)</option>
+                                    <option value="thank_you">🙏 thank_you (Thanks)</option>
+                                    <option value="welcome_message">🌟 welcome_message (Warm Welcome)</option>
+                                    <option value="sample_purchase_feedback">🛍️ sample_purchase_feedback (Feedback)</option>
+                                    <option value="sample_happy_hour_announcement">🎉 sample_happy_hour_announcement (Promo)</option>
+                                    <option value="appointment_reminder">📅 appointment_reminder (Reminder)</option>
+                                    <option value="custom">🔧 Custom Twilio Content SID...</option>
+                                </select>
+                                <input type="text" class="form-control form-control-sm" id="templateNameInput" placeholder="Enter Twilio Content SID (HXxxxxx)" style="display: none; flex: 1;">
+                            </div>
                         </div>
                         <div class="message-input">
                             <button class="attachment-btn" title="Attach file">
@@ -231,15 +243,15 @@
                 <div class="modal-body">
                     <div class="alert alert-danger d-none" id="newWhatsAppError"></div>
                     <div class="alert alert-success d-none" id="newWhatsAppSuccess"></div>
-                    
+
                     <!-- Development Mode Notice -->
                     <div class="alert alert-warning alert-dismissible fade show" role="alert">
                         <i class="bi bi-exclamation-triangle me-2"></i>
-                        <strong>Development Mode:</strong> You can only send to phone numbers added as test numbers in 
+                        <strong>Development Mode:</strong> You can only send to phone numbers added as test numbers in
                         <a href="https://developers.facebook.com/apps" target="_blank" class="alert-link">Facebook Developer Console</a>.
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
-                    
+
                     <form id="newWhatsAppForm">
                         <div class="recipient-mode-card">
                             <div class="recipient-mode-header">
@@ -310,23 +322,43 @@
                         </div>
 
                         <div class="mb-3" id="templateSection">
-                            <label class="form-label fw-semibold">Template Name</label>
-                            <input type="text" class="form-control" id="newTemplateName" 
-                                placeholder="e.g., hello_world" value="hello_world">
-                            <small class="form-text text-muted">
-                                Use an approved template from your WhatsApp Business account
+                            <label class="form-label fw-semibold">Template Selection</label>
+                            <select class="form-select mb-2" id="newTemplateSelector">
+                                <option value="">-- Select a Template --</option>
+                                <optgroup label="Quick Start Templates (Text-based)">
+                                    <option value="hello_world" selected>👋 hello_world - Welcome Message</option>
+                                    <option value="thank_you">🙏 thank_you - Thank You Message</option>
+                                    <option value="welcome_message">🌟 welcome_message - Warm Welcome</option>
+                                    <option value="sample_purchase_feedback">🛍️ sample_purchase_feedback - Purchase Feedback</option>
+                                    <option value="sample_happy_hour_announcement">🎉 sample_happy_hour_announcement - Promotion</option>
+                                    <option value="sample_flight_confirmation">✈️ sample_flight_confirmation - Flight Booking</option>
+                                    <option value="sample_movie_ticket_confirmation">🎬 sample_movie_ticket_confirmation - Movie Ticket</option>
+                                    <option value="sample_issue_resolution">✅ sample_issue_resolution - Issue Resolution</option>
+                                    <option value="sample_shipping_confirmation">📦 sample_shipping_confirmation - Shipping Update</option>
+                                    <option value="appointment_reminder">📅 appointment_reminder - Appointment Reminder</option>
+                                </optgroup>
+                                <optgroup label="Twilio Content Templates">
+                                    <option value="custom">🔧 Enter Twilio Content SID (HXxxxxx...)</option>
+                                    <option value="random">🎲 Send Random Template</option>
+                                </optgroup>
+                            </select>
+                            <input type="text" class="form-control" id="newTemplateName"
+                                placeholder="Enter your Twilio Content Template SID (e.g., HXa1b2c3d4e5...)"
+                                style="display: none;">
+                            <small class="form-text text-muted" id="templateHelpText">
+                                <i class="bi bi-info-circle"></i> Pre-built templates send instantly. For Twilio Content SIDs, select "Custom" option.
                             </small>
                         </div>
-                        
+
                         <div class="mb-3 d-none" id="textMessageSection">
                             <label class="form-label fw-semibold">Message</label>
-                            <textarea class="form-control" id="newWhatsAppInitialMessage" rows="3" 
+                            <textarea class="form-control" id="newWhatsAppInitialMessage" rows="3"
                                 placeholder="Type your message..."></textarea>
                             <small class="form-text text-muted">
                                 Note: Text messages only work if customer messaged you in last 24 hours
                             </small>
                         </div>
-                        
+
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-success" id="startConversationBtn">
                                 <i class="bi bi-check-circle me-2"></i>
@@ -352,6 +384,9 @@
                 this.csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                 this.modal = new bootstrap.Modal(document.getElementById('newWhatsAppModal'));
                 this.bulkLimit = 50;
+                this.refreshInterval = null;
+                this.messageRefreshInterval = null;
+                this.lastMessageCount = 0;
                 this.initializeApp();
             }
 
@@ -362,6 +397,7 @@
                 this.toggleRecipientMode();
                 this.updateBulkRecipientStats();
                 this.loadConversations();
+                this.startAutoRefresh();
             }
 
             setupEventListeners() {
@@ -380,6 +416,7 @@
                     }
                 });
                 document.getElementById('messageTypeSelect').addEventListener('change', () => this.toggleMessageType());
+                document.getElementById('templateSelector').addEventListener('change', () => this.handleTemplateSelection());
 
                 document.querySelectorAll('.quick-reply-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => this.insertQuickReply(e.target.textContent));
@@ -394,6 +431,7 @@
                     this.modal.show();
                 });
                 document.getElementById('newMessageType').addEventListener('change', () => this.toggleNewMessageType());
+                document.getElementById('newTemplateSelector').addEventListener('change', () => this.handleNewTemplateSelection());
                 document.getElementById('newWhatsAppForm').addEventListener('submit', (e) => this.sendNewWhatsApp(e));
                 document.getElementById('recipientModeSingle').addEventListener('change', () => this.toggleRecipientMode());
                 document.getElementById('recipientModeBulk').addEventListener('change', () => this.toggleRecipientMode());
@@ -404,7 +442,58 @@
                 this.setComposeEnabled(false);
             }
 
-            async loadConversations(selectConversationId = null) {
+            startAutoRefresh() {
+                // Refresh conversations list every 10 seconds
+                this.refreshInterval = setInterval(() => {
+                    this.loadConversations(this.currentConversationId, true);
+                }, 10000);
+
+                // Refresh current conversation messages every 5 seconds
+                this.messageRefreshInterval = setInterval(() => {
+                    if (this.currentConversationId) {
+                        this.refreshCurrentConversationMessages();
+                    }
+                }, 5000);
+            }
+
+            stopAutoRefresh() {
+                if (this.refreshInterval) {
+                    clearInterval(this.refreshInterval);
+                    this.refreshInterval = null;
+                }
+                if (this.messageRefreshInterval) {
+                    clearInterval(this.messageRefreshInterval);
+                    this.messageRefreshInterval = null;
+                }
+            }
+
+            async refreshCurrentConversationMessages() {
+                try {
+                    const response = await fetch(`/admin/api/conversations/${this.currentConversationId}/messages`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+
+                    if (!response.ok) {
+                        return;
+                    }
+
+                    const data = await response.json();
+                    const messages = data.messages || [];
+
+                    // Only update if message count changed
+                    if (messages.length !== this.lastMessageCount) {
+                        this.lastMessageCount = messages.length;
+                        this.renderMessages(messages);
+
+                        // Also refresh conversation list to update preview
+                        this.loadConversations(this.currentConversationId, true);
+                    }
+                } catch (error) {
+                    console.error('Error refreshing messages:', error);
+                }
+            }
+
+            async loadConversations(selectConversationId = null, silent = false) {
                 try {
                     const response = await fetch('/admin/api/conversations', {
                         headers: { 'Accept': 'application/json' }
@@ -420,15 +509,17 @@
 
                     const targetId = selectConversationId || this.currentConversationId;
                     if (targetId) {
-                        await this.selectConversationById(targetId);
-                    } else if (this.conversations.length > 0) {
+                        await this.selectConversationById(targetId, silent);
+                    } else if (this.conversations.length > 0 && !silent) {
                         await this.selectConversationById(this.conversations[0].id);
-                    } else {
+                    } else if (this.conversations.length === 0 && !silent) {
                         this.showEmptyState();
                     }
                 } catch (error) {
-                    console.error(error);
-                    this.showEmptyState();
+                    if (!silent) {
+                        console.error(error);
+                        this.showEmptyState();
+                    }
                 }
             }
 
@@ -493,7 +584,7 @@
                 });
             }
 
-            async selectConversationById(conversationId) {
+            async selectConversationById(conversationId, silent = false) {
                 const conversation = this.conversations.find(item => Number(item.id) === Number(conversationId));
                 if (!conversation) {
                     return;
@@ -511,7 +602,9 @@
                 this.setComposeEnabled(true);
 
                 await this.loadConversationMessages(conversation.id);
-                await this.markConversationRead(conversation.id);
+                if (!silent) {
+                    await this.markConversationRead(conversation.id);
+                }
             }
 
             setActiveThread(conversationId) {
@@ -573,7 +666,9 @@
                     }
 
                     const data = await response.json();
-                    this.renderMessages(data.messages || []);
+                    const messages = data.messages || [];
+                    this.lastMessageCount = messages.length;
+                    this.renderMessages(messages);
                 } catch (error) {
                     console.error(error);
                 }
@@ -616,14 +711,14 @@
                 }
 
                 const messageType = document.getElementById('messageTypeSelect').value;
-                const templateName = document.getElementById('templateNameInput').value.trim();
                 const input = document.getElementById('messageInput');
                 const message = input.value.trim();
                 const payload = { message_type: messageType };
 
                 if (messageType === 'template') {
+                    const templateName = this.getSelectedTemplate();
                     if (!templateName) {
-                        alert('Template name is required.');
+                        alert('Please select or enter a template name.');
                         return;
                     }
                     payload.template_name = templateName;
@@ -654,7 +749,8 @@
                         input.value = '';
                         input.style.height = 'auto';
                     } else {
-                        document.getElementById('templateNameInput').value = '';
+                        document.getElementById('templateSelector').value = 'hello_world';
+                        this.handleTemplateSelection();
                     }
 
                     await this.loadConversations(this.currentConversationId);
@@ -799,7 +895,7 @@
 
                 const validateData = await validateResponse.json();
 
-                if (!validateResponse.ok || !validateData.exists) {
+                if (!validateResponse.ok || !validateData.valid) {
                     throw new Error(validateData.message || 'Invalid WhatsApp number.');
                 }
 
@@ -828,13 +924,13 @@
 
             async sendNewWhatsApp(event) {
                 event.preventDefault();
-                
+
                 const errorBox = document.getElementById('newWhatsAppError');
                 const successBox = document.getElementById('newWhatsAppSuccess');
                 const btnText = document.getElementById('btnText');
                 const btnSpinner = document.getElementById('btnSpinner');
                 const submitBtn = document.getElementById('startConversationBtn');
-                
+
                 // Reset alerts
                 errorBox.classList.add('d-none');
                 successBox.classList.add('d-none');
@@ -845,7 +941,7 @@
                 const phoneNumber = document.getElementById('newWhatsAppNumber').value.trim();
                 const bulkNumbers = this.getBulkRecipientNumbers();
                 const messageType = document.getElementById('newMessageType').value;
-                const templateName = document.getElementById('newTemplateName').value.trim();
+                const templateName = this.getNewSelectedTemplate();
                 const textMessage = document.getElementById('newWhatsAppInitialMessage').value.trim();
 
                 if (recipientMode === 'single' && !phoneNumber) {
@@ -896,7 +992,7 @@
                         const startData = await this.startWhatsAppConversation(payload);
 
                         const msgType = messageType === 'template' ? 'Template' : 'Message';
-                        successBox.textContent = `${msgType} sent successfully! Conversation started.`;
+                        successBox.textContent = `${msgType} sent successfully! ${startData.conversation_existed ? 'Using existing conversation.' : 'Conversation started.'}`;
                         btnText.textContent = 'Success!';
 
                         setTimeout(() => {
@@ -997,7 +1093,8 @@
                 document.getElementById('btnText').textContent = this.getSubmitButtonLabel();
                 document.getElementById('btnSpinner').classList.add('d-none');
                 document.getElementById('startConversationBtn').disabled = false;
-                document.getElementById('newTemplateName').value = 'hello_world';
+                document.getElementById('newTemplateSelector').value = 'hello_world';
+                document.getElementById('newTemplateName').value = '';
                 this.toggleNewMessageType();
                 this.clearBulkRecipients();
                 document.getElementById('bulkUploadInput').value = '';
@@ -1012,16 +1109,89 @@
                 if (messageType === 'template') {
                     templateSection.classList.remove('d-none');
                     textSection.classList.add('d-none');
+                    this.handleNewTemplateSelection();
                 } else {
                     templateSection.classList.add('d-none');
                     textSection.classList.remove('d-none');
                 }
             }
 
+            handleNewTemplateSelection() {
+                const selector = document.getElementById('newTemplateSelector');
+                const customInput = document.getElementById('newTemplateName');
+                const helpText = document.getElementById('templateHelpText');
+                const selectedValue = selector.value;
+
+                if (selectedValue === 'custom') {
+                    customInput.style.display = 'block';
+                    customInput.value = '';
+                    customInput.required = true;
+                    customInput.focus();
+                    helpText.innerHTML = '<i class="bi bi-info-circle"></i> Enter your Twilio Content Template SID (starts with HX...)';
+                } else if (selectedValue === 'random') {
+                    customInput.style.display = 'none';
+                    customInput.required = false;
+                    helpText.innerHTML = '<i class="bi bi-dice-5"></i> A random template will be selected from the available options';
+                } else {
+                    customInput.style.display = 'none';
+                    customInput.required = false;
+                    helpText.innerHTML = '<i class="bi bi-check-circle"></i> Using template: <strong>' + selectedValue + '</strong>';
+                }
+            }
+
+            getNewSelectedTemplate() {
+                const selector = document.getElementById('newTemplateSelector');
+                const customInput = document.getElementById('newTemplateName');
+                const selectedValue = selector.value;
+
+                if (selectedValue === 'random') {
+                    const templates = [
+                        'hello_world',
+                        'thank_you',
+                        'welcome_message',
+                        'sample_purchase_feedback',
+                        'sample_happy_hour_announcement',
+                        'sample_flight_confirmation',
+                        'sample_movie_ticket_confirmation',
+                        'sample_issue_resolution',
+                        'sample_shipping_confirmation',
+                        'appointment_reminder'
+                    ];
+                    return templates[Math.floor(Math.random() * templates.length)];
+                }
+
+                return selectedValue === 'custom' ? customInput.value.trim() : selectedValue;
+            }
+
             toggleMessageType() {
                 const messageType = document.getElementById('messageTypeSelect').value;
-                const templateInput = document.getElementById('templateNameInput');
-                templateInput.style.display = messageType === 'template' ? 'block' : 'none';
+                const templateContainer = document.getElementById('templateOptionsContainer');
+                templateContainer.style.display = messageType === 'template' ? 'flex' : 'none';
+                if (messageType === 'template') {
+                    document.getElementById('templateSelector').value = 'hello_world';
+                    this.handleTemplateSelection();
+                }
+            }
+
+            handleTemplateSelection() {
+                const selector = document.getElementById('templateSelector');
+                const customInput = document.getElementById('templateNameInput');
+                const selectedValue = selector.value;
+
+                if (selectedValue === 'custom') {
+                    customInput.style.display = 'block';
+                    customInput.value = '';
+                    customInput.focus();
+                } else {
+                    customInput.style.display = 'none';
+                    customInput.value = selectedValue;
+                }
+            }
+
+            getSelectedTemplate() {
+                const selector = document.getElementById('templateSelector');
+                const customInput = document.getElementById('templateNameInput');
+                return selector.value === 'custom' ? customInput.value.trim() : selector.value;
             }
 
             insertQuickReply(text) {

@@ -4,14 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Conversation;
 use App\Models\Message;
-use App\Services\WhatsAppService;
+use App\Services\TwilioWhatsAppService;
 use Illuminate\Http\Request;
 
 class AdminDashboardController extends Controller
 {
     protected $whatsappService;
 
-    public function __construct(WhatsAppService $whatsappService)
+    public function __construct(TwilioWhatsAppService $whatsappService)
     {
         $this->whatsappService = $whatsappService;
     }
@@ -102,8 +102,8 @@ class AdminDashboardController extends Controller
 
         // First validate the WhatsApp number
         $validation = $this->whatsappService->validateWhatsAppNumber($phoneNumber, $admin);
-        
-        if (!$validation['exists']) {
+
+        if (!$validation['valid']) {
             return response()->json([
                 'success' => false,
                 'message' => $validation['message']
@@ -112,44 +112,64 @@ class AdminDashboardController extends Controller
 
         $formattedNumber = $validation['formatted_number'];
 
-        // Check if conversation already exists
-        $conversation = Conversation::where('user_id', $admin->id)
-            ->where('visitor_phone', $formattedNumber)
+        // Check if conversation already exists for this admin and phone number
+        $conversation = Conversation::where(function($query) use ($admin, $formattedNumber) {
+                $query->where('user_id', $admin->id)
+                      ->where('visitor_phone', $formattedNumber);
+            })
+            ->orWhere(function($query) use ($formattedNumber) {
+                // Also check by visitor_id format used by webhook
+                $query->where('visitor_id', 'whatsapp_' . $formattedNumber)
+                      ->whereNull('user_id'); // Webhook conversations don't have user_id initially
+            })
             ->where('platform', 'whatsapp')
             ->first();
+
+        $conversationExisted = (bool) $conversation;
 
         if (!$conversation) {
             // Create new conversation
             $conversation = Conversation::create([
                 'user_id' => $admin->id,
+                'visitor_id' => 'whatsapp_' . $formattedNumber,
                 'visitor_phone' => $formattedNumber,
                 'platform' => 'whatsapp',
                 'status' => 'active',
                 'last_message_at' => now(),
                 'unread_count' => 0
             ]);
+        } else {
+            // Update existing conversation to link it to this admin if not already
+            if (!$conversation->user_id) {
+                $conversation->update(['user_id' => $admin->id]);
+            }
+            // Reset unread count when admin initiates conversation
+            $conversation->update(['unread_count' => 0]);
         }
 
         // Send initial message or template
         $sent = false;
         $messageContent = '';
+        $result = [];
 
         if ($messageType === 'template' && !empty($templateName)) {
-            // Send template message
-            $sent = $this->whatsappService->sendTemplateMessageForUser(
+            // Send template message (templateName is actually templateSid for Twilio)
+            $result = $this->whatsappService->sendTemplateMessageForUser(
                 $admin,
                 $templateName,
                 [],
                 $formattedNumber
             );
+            $sent = $result['success'] ?? false;
             $messageContent = "Template: {$templateName}";
         } elseif ($messageType === 'text' && !empty($initialMessage)) {
             // Send text message
-            $sent = $this->whatsappService->sendMessageForUser(
+            $result = $this->whatsappService->sendMessageForUser(
                 $admin,
                 $initialMessage,
                 $formattedNumber
             );
+            $sent = $result['success'] ?? false;
             $messageContent = $initialMessage;
         }
 
@@ -171,17 +191,22 @@ class AdminDashboardController extends Controller
             // Only return error if we tried to send something
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to send initial message. Please check WhatsApp credentials.'
+                'message' => 'Failed to send initial message via Twilio. ' . ($result['error'] ?? 'Please check Twilio credentials.')
             ], 500);
         }
 
         // Load the conversation with messages
         $conversation->load(['messages', 'latestMessage']);
 
+        $responseMessage = $conversationExisted
+            ? 'Using existing conversation. Message sent successfully.'
+            : 'New conversation started successfully.';
+
         return response()->json([
             'success' => true,
-            'message' => 'Conversation started successfully',
-            'conversation' => $conversation
+            'message' => $responseMessage,
+            'conversation' => $conversation,
+            'conversation_existed' => $conversationExisted
         ]);
     }
 }

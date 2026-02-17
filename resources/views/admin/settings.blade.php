@@ -94,8 +94,8 @@
         <!-- WhatsApp Configuration Card -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-whatsapp me-2"></i>WhatsApp Business API</span>
-                @if(!empty($admin->whatsapp_access_token) && !empty($admin->whatsapp_phone_number_id))
+                <span><i class="bi bi-whatsapp me-2"></i>Twilio WhatsApp API</span>
+                @if(!empty($admin->twilio_account_sid) && !empty($admin->twilio_auth_token))
                     <span class="status-badge status-connected">
                         <i class="bi bi-check-circle me-1"></i>Connected
                     </span>
@@ -106,77 +106,86 @@
                 @endif
             </div>
             <div class="card-body">
-                <!-- Development Mode Warning -->
-                <div class="alert alert-warning border-warning" style="border-left: 4px solid #ffc107;">
+                <!-- Twilio Sandbox Info -->
+                <div class="alert alert-info border-info" style="border-left: 4px solid #0dcaf0;">
                     <div class="d-flex align-items-start">
-                        <i class="bi bi-exclamation-triangle-fill me-3" style="font-size: 24px;"></i>
+                        <i class="bi bi-info-circle-fill me-3" style="font-size: 24px;"></i>
                         <div>
-                            <h6 class="alert-heading mb-2">Development Mode Limitation</h6>
+                            <h6 class="alert-heading mb-2">Twilio WhatsApp Sandbox</h6>
                             <p class="mb-2">
-                                <strong>Currently, you can only send messages to test phone numbers added in your Facebook Developer Console.</strong>
-                            </p>
-                            <p class="mb-2">
-                                To send messages to <strong>ANY WhatsApp number</strong> without restrictions:
+                                <strong>For testing and development, use Twilio's WhatsApp Sandbox:</strong>
                             </p>
                             <ol class="mb-2">
-                                <li>Complete Business Verification on Meta Business Suite</li>
-                                <li>Get your Display Name approved</li>
-                                <li>Create and approve message templates</li>
-                                <li>Switch to Production Mode in Facebook Developer Console</li>
+                                <li>Join the sandbox by sending "join &lt;your-code&gt;" to the Twilio WhatsApp number</li>
+                                <li>Use sandbox number: <strong>+1 415 523 8886</strong></li>
+                                <li>For production, upgrade to an approved Twilio phone number</li>
                             </ol>
-                            <a href="{{ asset('docs/WHATSAPP_PRODUCTION_MODE_GUIDE.md') }}" class="btn btn-sm btn-warning" target="_blank">
-                                <i class="bi bi-book me-1"></i> Read Complete Production Mode Guide
+                            <p class="mb-2">
+                                <strong>Production Mode:</strong> To send to any WhatsApp number, request a Twilio approved sender phone number.
+                            </p>
+                            <a href="{{ asset('TWILIO_WHATSAPP_SETUP_GUIDE.md') }}" class="btn btn-sm btn-info" target="_blank">
+                                <i class="bi bi-book me-1"></i> Read Twilio Setup Guide
                             </a>
-                            <a href="https://developers.facebook.com/apps" class="btn btn-sm btn-outline-warning" target="_blank">
-                                <i class="bi bi-gear me-1"></i> Go to Developer Console
+                            <a href="https://console.twilio.com/" class="btn btn-sm btn-outline-info" target="_blank">
+                                <i class="bi bi-gear me-1"></i> Go to Twilio Console
                             </a>
                         </div>
                     </div>
                 </div>
 
-                <div class="alert alert-info">
+                <div class="alert alert-success">
                     <i class="bi bi-info-circle me-2"></i>
-                    <strong>Quick Setup:</strong> Configure your WhatsApp Business API credentials to send messages from this admin account.
+                    <strong>Quick Setup:</strong> Configure your Twilio credentials to send WhatsApp messages from this admin account.
                 </div>
 
                 <form id="whatsappSettingsForm">
                     <div class="mb-3">
                         <label for="phone_number" class="form-label">Your Phone Number</label>
-                        <input type="text" class="form-control" id="phone_number" name="phone_number" 
-                               value="{{ $admin->phone_number }}" 
-                               placeholder="e.g., 8801XXXXXXXXX">
-                        <small class="form-text text-muted">Your WhatsApp business phone number</small>
+                        <input type="text" class="form-control" id="phone_number" name="phone_number"
+                               value="{{ $admin->phone_number }}"
+                               placeholder="e.g., +8801XXXXXXXXX">
+                        <small class="form-text text-muted">Your WhatsApp phone number (E.164 format with +country code)</small>
                     </div>
 
                     <div class="mb-3">
-                        <label for="whatsapp_phone_number_id" class="form-label">WhatsApp Phone Number ID</label>
-                        <input type="text" class="form-control" id="whatsapp_phone_number_id" name="whatsapp_phone_number_id" 
-                               value="{{ $admin->whatsapp_phone_number_id }}" 
-                               placeholder="e.g., 123456789012345" required>
-                        <small class="form-text text-muted">From Facebook Developer Dashboard > WhatsApp > API Setup</small>
+                        <label for="twilio_account_sid" class="form-label">Twilio Account SID</label>
+                        <input type="text" class="form-control" id="twilio_account_sid" name="twilio_account_sid"
+                               value="{{ $admin->twilio_account_sid }}"
+                               placeholder="e.g., ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" required>
+                        <small class="form-text text-muted">From Twilio Console > Account Info</small>
                     </div>
 
                     <div class="mb-3">
-                        <label for="whatsapp_access_token" class="form-label">WhatsApp Access Token</label>
-                        <textarea class="form-control" id="whatsapp_access_token" name="whatsapp_access_token" rows="3" 
-                                  placeholder="Paste your access token here..." required>{{ $admin->whatsapp_access_token }}</textarea>
-                        <small class="form-text text-muted">Temporary or System User Access Token from Facebook</small>
+                        <label for="twilio_auth_token" class="form-label">Twilio Auth Token</label>
+                        <input type="password" class="form-control" id="twilio_auth_token" name="twilio_auth_token"
+                               value="{{ $admin->twilio_auth_token }}"
+                               placeholder="Paste your auth token here..." required>
+                        <small class="form-text text-muted">From Twilio Console > Account Info (click to reveal)</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="twilio_whatsapp_from" class="form-label">Twilio WhatsApp From Number</label>
+                        <input type="text" class="form-control" id="twilio_whatsapp_from" name="twilio_whatsapp_from"
+                               value="{{ $admin->twilio_whatsapp_from }}"
+                               placeholder="+14155238886" required>
+                        <small class="form-text text-muted">Sandbox: +14155238886 | Production: Your approved Twilio number</small>
                     </div>
 
                     <div class="alert alert-warning">
                         <strong>Setup Instructions:</strong>
                         <ol class="mb-0 mt-2">
-                            <li>Go to <a href="https://developers.facebook.com" target="_blank">Facebook Developer Dashboard</a></li>
-                            <li>Select your WhatsApp Business App</li>
-                            <li>Navigate to WhatsApp > API Setup</li>
-                            <li>Copy the Phone Number ID</li>
-                            <li>Generate a Temporary Access Token (or use System User Token for permanent access)</li>
-                            <li>Paste both values above and save</li>
+                            <li>Go to <a href="https://console.twilio.com/" target="_blank">Twilio Console</a></li>
+                            <li>Navigate to Account > Account Info</li>
+                            <li>Copy your Account SID and Auth Token</li>
+                            <li>For testing, use Twilio Sandbox number: <strong>+14155238886</strong></li>
+                            <li>Join sandbox by sending "join &lt;your-code&gt;" from your WhatsApp</li>
+                            <li>Configure webhook in Twilio Console > Messaging > WhatsApp Sandbox Settings</li>
+                            <li>Paste all values above and save</li>
                         </ol>
                     </div>
 
                     <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-save me-2"></i>Save WhatsApp Credentials
+                        <i class="bi bi-save me-2"></i>Save Twilio Credentials
                     </button>
                 </form>
 
@@ -224,21 +233,22 @@
 
     <script>
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        
+
         document.getElementById('whatsappSettingsForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+
             const submitBtn = this.querySelector('button[type="submit"]');
             const originalText = submitBtn.innerHTML;
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
-            
+
             const formData = {
-                whatsapp_access_token: document.getElementById('whatsapp_access_token').value.trim(),
-                whatsapp_phone_number_id: document.getElementById('whatsapp_phone_number_id').value.trim(),
+                twilio_account_sid: document.getElementById('twilio_account_sid').value.trim(),
+                twilio_auth_token: document.getElementById('twilio_auth_token').value.trim(),
+                twilio_whatsapp_from: document.getElementById('twilio_whatsapp_from').value.trim(),
                 phone_number: document.getElementById('phone_number').value.trim(),
             };
-            
+
             try {
                 const response = await fetch('/admin/api/settings/whatsapp', {
                     method: 'POST',
@@ -249,9 +259,9 @@
                     },
                     body: JSON.stringify(formData)
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (response.ok && data.success) {
                     showAlert('success', data.message || 'Settings saved successfully!');
                     // Reload page after 1 second to show updated status
@@ -269,11 +279,11 @@
                 submitBtn.innerHTML = originalText;
             }
         });
-        
+
         function showAlert(type, message) {
             const successAlert = document.getElementById('successAlert');
             const errorAlert = document.getElementById('errorAlert');
-            
+
             if (type === 'success') {
                 document.getElementById('successMessage').textContent = message;
                 successAlert.classList.remove('d-none');

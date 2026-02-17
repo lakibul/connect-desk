@@ -16,8 +16,9 @@ class AdminSettingsController extends Controller
     public function updateWhatsAppCredentials(Request $request)
     {
         $validated = $request->validate([
-            'whatsapp_access_token' => 'required|string',
-            'whatsapp_phone_number_id' => 'required|string',
+            'twilio_account_sid' => 'nullable|string',
+            'twilio_auth_token' => 'nullable|string',
+            'twilio_whatsapp_from' => 'nullable|string',
             'phone_number' => 'nullable|string',
         ]);
 
@@ -26,7 +27,7 @@ class AdminSettingsController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'WhatsApp credentials updated successfully',
+            'message' => 'Twilio WhatsApp credentials updated successfully',
         ]);
     }
 }

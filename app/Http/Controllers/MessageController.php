@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
-use App\Services\WhatsAppService;
+use App\Services\TwilioWhatsAppService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
@@ -14,7 +14,7 @@ class MessageController extends Controller
 {
     protected $whatsAppService;
 
-    public function __construct(WhatsAppService $whatsAppService)
+    public function __construct(TwilioWhatsAppService $whatsAppService)
     {
         $this->whatsAppService = $whatsAppService;
     }
@@ -75,20 +75,26 @@ class MessageController extends Controller
                                  "Message:\n{$request->message}\n\n" .
                                  "---\nSent via ConnectDesk Platform";
 
-                // Send to the target WhatsApp number with user's phone number as sender context
-                $whatsappSent = $this->whatsAppService->sendMessage(
+                // Get target phone from config (admin's phone number)
+                $targetPhone = config('services.twilio.target_phone_number');
+
+                // Send to the target WhatsApp number via Twilio
+                $result = $this->whatsAppService->sendMessage(
                     $whatsappMessage,
-                    null,  // null uses default target number from config
+                    $targetPhone,
                     $user->phone_number  // user's phone as sender context
                 );
 
+                $whatsappSent = $result['success'] ?? false;
+
                 if (!$whatsappSent) {
-                    \Log::warning('Failed to send WhatsApp message', [
+                    \Log::warning('Failed to send WhatsApp message via Twilio', [
                         'user_id' => $user->id,
                         'message_id' => $message->id,
                         'user_name' => $user->name,
                         'user_phone' => $user->phone_number,
-                        'target_number' => config('services.whatsapp.target_phone_number')
+                        'target_number' => $targetPhone,
+                        'error' => $result['error'] ?? 'Unknown error',
                     ]);
                 }
             }            // Update conversation
@@ -147,27 +153,29 @@ class MessageController extends Controller
             }
 
             if ($messageType === 'template') {
-                $templateName = $validated['template_name'];
-                $whatsappSent = $this->whatsAppService->sendTemplateMessageForUser(
+                $templateSid = $validated['template_name'];
+                $result = $this->whatsAppService->sendTemplateMessageForUser(
                     $admin,
-                    $templateName,
+                    $templateSid,
                     [],
                     $recipient
                 );
-                $messageBody = "Template: {$templateName}";
+                $whatsappSent = $result['success'] ?? false;
+                $messageBody = "Template: {$templateSid}";
             } else {
                 $messageBody = $validated['message'];
-                $whatsappSent = $this->whatsAppService->sendMessageForUser(
+                $result = $this->whatsAppService->sendMessageForUser(
                     $admin,
                     $messageBody,
                     $recipient
                 );
+                $whatsappSent = $result['success'] ?? false;
             }
 
             if (!$whatsappSent) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Failed to send WhatsApp message. Check admin WhatsApp credentials.'
+                    'message' => 'Failed to send WhatsApp message via Twilio. ' . ($result['error'] ?? 'Check admin Twilio credentials.')
                 ], 502);
             }
         } else {
@@ -231,27 +239,29 @@ class MessageController extends Controller
         }
 
         if ($messageType === 'template') {
-            $templateName = $validated['template_name'];
-            $sent = $this->whatsAppService->sendTemplateMessageForUser(
+            $templateSid = $validated['template_name'];
+            $result = $this->whatsAppService->sendTemplateMessageForUser(
                 $admin,
-                $templateName,
+                $templateSid,
                 [],
                 $recipient
             );
-            $messageBody = "Template: {$templateName}";
+            $sent = $result['success'] ?? false;
+            $messageBody = "Template: {$templateSid}";
         } else {
             $messageBody = $validated['message'];
-            $sent = $this->whatsAppService->sendMessageForUser(
+            $result = $this->whatsAppService->sendMessageForUser(
                 $admin,
                 $messageBody,
                 $recipient
             );
+            $sent = $result['success'] ?? false;
         }
 
         if (!$sent) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to send WhatsApp message. Check admin WhatsApp credentials.'
+                'message' => 'Failed to send WhatsApp message via Twilio. ' . ($result['error'] ?? 'Check admin Twilio credentials.')
             ], 502);
         }
 
@@ -309,30 +319,32 @@ class MessageController extends Controller
     }
 
     /**
-     * Test WhatsApp integration
+     * Test WhatsApp integration with Twilio
      */
     public function testWhatsApp(Request $request)
     {
         try {
-            $targetNumber = config('services.whatsapp.target_phone_number', '8801604509006');
-            $testMessage = "🧪 ConnectDesk WhatsApp Integration Test\n\n" .
-                          "This is a test message to verify the WhatsApp Business API integration.\n\n" .
+            $targetNumber = config('services.twilio.target_phone_number', '+8801604509006');
+            $testMessage = "🧪 ConnectDesk Twilio WhatsApp Integration Test\n\n" .
+                          "This is a test message to verify the Twilio WhatsApp integration.\n\n" .
                           "Timestamp: " . now()->format('Y-m-d H:i:s') . "\n" .
                           "Test successful ✅";
 
-            $whatsappSent = $this->whatsAppService->sendMessage($testMessage);
+            $result = $this->whatsAppService->sendMessage($testMessage, $targetNumber);
 
             return response()->json([
-                'success' => $whatsappSent,
-                'message' => $whatsappSent ?
+                'success' => $result['success'] ?? false,
+                'message' => $result['success'] ?
                     "WhatsApp test message sent successfully to {$targetNumber}" :
-                    'Failed to send WhatsApp test message',
+                    'Failed to send WhatsApp test message via Twilio',
                 'target_number' => $targetNumber,
+                'message_id' => $result['message_id'] ?? null,
+                'error' => $result['error'] ?? null,
                 'timestamp' => now()->toISOString()
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('WhatsApp test failed', [
+            \Log::error('Twilio WhatsApp test failed', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -346,68 +358,69 @@ class MessageController extends Controller
     }
 
     /**
-     * Send WhatsApp text message with preview URL
-     */
-    /**
-     * Send WhatsApp text message
+     * Send WhatsApp text message via Twilio
      */
     public function sendTextMessage(Request $request)
     {
-        $message = $request->input('body', 'Here is the info you requested! https://www.meta.com/quest/quest-3/');
-        $defaultTarget = config('services.whatsapp.target_phone_number', '8801604509006');
+        $message = $request->input('body', 'Here is the info you requested! https://www.connectdesk.com');
+        $defaultTarget = config('services.twilio.target_phone_number', '+8801604509006');
         $phone = $request->input('to', $defaultTarget);
 
-        $sent = $this->whatsAppService->sendMessage($message, $phone);
+        $result = $this->whatsAppService->sendMessage($message, $phone);
 
         return response()->json([
-            'success' => $sent,
+            'success' => $result['success'] ?? false,
             'to' => $phone,
-            'body' => $message
+            'body' => $message,
+            'message_id' => $result['message_id'] ?? null,
+            'error' => $result['error'] ?? null,
         ]);
     }
 
     /**
-     * Send WhatsApp template message (SMS/hello_world)
+     * Send WhatsApp template message via Twilio Content API
      */
     public function sendTemplateMessage(Request $request)
     {
         try {
             $validated = $request->validate([
-                'to' => 'nullable|string|regex:/^[0-9]{10,15}$/',
-                'template_name' => 'nullable|string|in:hello_world',
+                'to' => 'nullable|string',
+                'template_sid' => 'nullable|string',
             ]);
 
             // Default values
-            $defaultTarget = config('services.whatsapp.target_phone_number', '8801604509006');
+            $defaultTarget = config('services.twilio.target_phone_number', '+8801604509006');
             $recipient = $validated['to'] ?? $defaultTarget;
-            $templateName = $validated['template_name'] ?? 'hello_world';
+            $templateSid = $validated['template_sid'] ?? '';
 
-            // Remove + if present (API expects number without +)
-            $recipient = ltrim($recipient, '+');
+            if (empty($templateSid)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Template SID is required',
+                ], 422);
+            }
 
-            \Log::info('Sending WhatsApp template message', [
+            \Log::info('Sending Twilio WhatsApp template message', [
                 'recipient' => $recipient,
-                'template' => $templateName,
-                'phone_number_id' => config('services.whatsapp.phone_number_id')
+                'template_sid' => $templateSid,
             ]);
 
-            $templateSent = $this->whatsAppService->sendTemplateMessage($templateName, [], $recipient);
+            $result = $this->whatsAppService->sendTemplateMessage($templateSid, [], $recipient);
 
             return response()->json([
-                'success' => $templateSent,
-                'message' => $templateSent ?
-                    "WhatsApp template '{$templateName}' sent successfully to {$recipient}" :
-                    "Failed to send WhatsApp template '{$templateName}' to {$recipient}",
-                'template' => $templateName,
+                'success' => $result['success'] ?? false,
+                'message' => $result['success'] ?
+                    "WhatsApp template sent successfully to {$recipient}" :
+                    "Failed to send WhatsApp template to {$recipient}",
+                'template_sid' => $templateSid,
                 'recipient' => $recipient,
-                'phone_number_id' => config('services.whatsapp.phone_number_id'),
-                'messaging_product' => 'whatsapp',
-                'type' => 'template',
+                'message_id' => $result['message_id'] ?? null,
+                'error' => $result['error'] ?? null,
                 'timestamp' => now()->toISOString()
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('WhatsApp template send failed', [
+            \Log::error('Twilio WhatsApp template send failed', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -421,56 +434,59 @@ class MessageController extends Controller
     }
 
     /**
-     * Debug WhatsApp configuration and connection
+     * Debug Twilio WhatsApp configuration
      */
     public function whatsappDebug(Request $request)
     {
-        $accessToken = config('services.whatsapp.access_token');
-        $phoneNumberId = config('services.whatsapp.phone_number_id');
-        $targetPhone = config('services.whatsapp.target_phone_number');
+        $accountSid = config('services.twilio.account_sid');
+        $authToken = config('services.twilio.auth_token');
+        $whatsappFrom = config('services.twilio.whatsapp_from');
+        $targetPhone = config('services.twilio.target_phone_number');
 
-        $tokenStatus = 'unknown';
-        $tokenMessage = '';
+        $configStatus = 'unknown';
+        $configMessage = '';
 
-        if (empty($accessToken)) {
-            $tokenStatus = 'missing';
-            $tokenMessage = 'Access token not configured in .env';
+        if (empty($accountSid)) {
+            $configStatus = 'missing';
+            $configMessage = 'Twilio Account SID not configured in .env';
+        } elseif (empty($authToken)) {
+            $configStatus = 'missing';
+            $configMessage = 'Twilio Auth Token not configured in .env';
+        } elseif (empty($whatsappFrom)) {
+            $configStatus = 'missing';
+            $configMessage = 'Twilio WhatsApp from number not configured in .env';
         } else {
-            // Try to validate token by making a simple API call
-            try {
-                $client = new \GuzzleHttp\Client();
-                $response = $client->get('https://graph.facebook.com/v18.0/me', [
-                    'headers' => [
-                        'Authorization' => 'Bearer ' . $accessToken,
-                    ]
-                ]);
-                $tokenStatus = 'valid';
-                $tokenMessage = 'Access token is valid';
-            } catch (\Exception $e) {
-                $tokenStatus = 'invalid';
-                $tokenMessage = $e->getMessage();
-            }
+            $configStatus = 'configured';
+            $configMessage = 'All Twilio credentials are configured';
         }
 
         return response()->json([
+            'service' => 'Twilio WhatsApp',
             'configuration' => [
-                'phone_number_id' => $phoneNumberId ?? 'not configured',
+                'account_sid' => $accountSid ? substr($accountSid, 0, 10) . '...' : 'not configured',
+                'auth_token' => $authToken ? substr($authToken, 0, 10) . '...' : 'not configured',
+                'whatsapp_from' => $whatsappFrom ?? 'not configured',
                 'target_phone' => $targetPhone ?? 'not configured',
-                'access_token_status' => $tokenStatus,
-                'access_token_message' => $tokenMessage,
-                'token_first_20_chars' => $accessToken ? substr($accessToken, 0, 20) . '...' : 'none',
+                'config_status' => $configStatus,
+                'config_message' => $configMessage,
             ],
             'instructions' => [
-                'issue' => 'WhatsApp access token has expired',
-                'reason' => 'Meta access tokens are valid for 24 hours by default',
-                'solution' => 'Get a new access token from Meta/Facebook Dashboard',
+                'setup' => 'Twilio WhatsApp Sandbox Setup',
                 'steps' => [
-                    '1. Go to https://developers.facebook.com',
-                    '2. Navigate to Settings > Basic > Access Tokens',
-                    '3. Copy the User Access Token or generate a new one',
-                    '4. Update .env file: WHATSAPP_ACCESS_TOKEN="your_new_token"',
-                    '5. Clear config cache: php artisan config:clear',
-                    '6. Test with POST /api/test-whatsapp'
+                    '1. Go to https://console.twilio.com',
+                    '2. Navigate to Messaging > Try it out > Send a WhatsApp message',
+                    '3. Follow the instructions to join your sandbox',
+                    '4. Get your Account SID and Auth Token from Console Dashboard',
+                    '5. Get your WhatsApp sandbox number (format: +14155238886)',
+                    '6. Update .env file with Twilio credentials',
+                    '7. Clear config cache: php artisan config:clear',
+                    '8. Test with POST /api/test-whatsapp'
+                ],
+                'env_variables' => [
+                    'TWILIO_ACCOUNT_SID' => 'Your Account SID from Twilio Console',
+                    'TWILIO_AUTH_TOKEN' => 'Your Auth Token from Twilio Console',
+                    'TWILIO_WHATSAPP_FROM' => 'Your WhatsApp sandbox number (e.g., +14155238886)',
+                    'TWILIO_TARGET_PHONE' => 'Admin phone number to receive messages (e.g., +8801XXXXXXXXX)',
                 ]
             ]
         ]);
