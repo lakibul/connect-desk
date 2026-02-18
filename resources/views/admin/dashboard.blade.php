@@ -13,25 +13,65 @@
 
     <!-- Custom CSS -->
     <link href="{{ asset('css/admin-dashboard.css') }}" rel="stylesheet">
+    <style>
+        /* Keep chat composer pinned to the bottom of the visible chat pane */
+        .dashboard-container > .alert {
+            flex: 0 0 auto;
+        }
+
+        .dashboard-container > .row.g-0.h-100 {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 0 !important;
+        }
+
+        .chat-main {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .chat-interface {
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr) auto;
+            min-height: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .messages-container {
+            min-height: 0;
+            overflow-y: auto;
+        }
+
+        .message-input-container {
+            position: sticky;
+            bottom: 0;
+            margin-top: auto;
+            z-index: 20;
+            background: #fff;
+            flex-shrink: 0;
+        }
+    </style>
 </head>
 <body>
     <!-- Navigation Header -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
-        <div class="container-fluid">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm border-bottom">
+        <div class="container-fluid px-4">
             <a class="navbar-brand d-flex align-items-center" href="#">
-                <i class="bi bi-chat-dots-fill me-2"></i>
+                <i class="bi bi-chat-dots-fill me-2 text-success"></i>
                 <span class="fw-bold">ConnectDesk</span>
             </a>
 
-            <div class="navbar-nav ms-auto">
+            <div class="d-flex align-items-center ms-auto">
                 <div class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" role="button" data-bs-toggle="dropdown">
-                        <div class="avatar-circle me-2">
+                    <a class="nav-link dropdown-toggle d-flex align-items-center ps-3 pe-2" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="me-2 d-none d-md-inline fw-medium">{{ auth()->user()->name ?? 'Admin' }}</span>
+                        <div class="avatar-circle">
                             <i class="bi bi-person-fill"></i>
                         </div>
-                        <span>{{ auth()->user()->name ?? 'Admin' }}</span>
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-end">
+                    <ul class="dropdown-menu dropdown-menu-end shadow">
                         <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i>Profile</a></li>
                         <li><a class="dropdown-item" href="{{ route('admin.settings') }}"><i class="bi bi-gear me-2"></i>Settings</a></li>
                         <li><hr class="dropdown-divider"></li>
@@ -72,17 +112,12 @@
                             <span>WhatsApp</span>
                             <span class="badge">0</span>
                         </button>
-                        <button class="platform-tab" data-platform="facebook">
-                            <i class="bi bi-facebook"></i>
-                            <span>Facebook</span>
-                            <span class="badge">0</span>
-                        </button>
                     </div>
 
                     <!-- New Conversation Button -->
                     <div class="p-3">
-                        <button class="btn btn-success w-100" id="newConversationBtn" style="border-radius: 8px; font-weight: 500;">
-                            <i class="bi bi-plus-circle me-2"></i>
+                        <button class="btn btn-success w-100 new-conversation-btn" id="newConversationBtn">
+                            <i class="bi bi-plus-circle-fill me-2"></i>
                             Start New Conversation
                         </button>
                     </div>
@@ -598,7 +633,7 @@
                 this.updatePlatformIndicator(conversation.platform);
 
                 document.getElementById('emptyChatState').style.display = 'none';
-                document.querySelector('.chat-interface').style.display = 'flex';
+                document.querySelector('.chat-interface').style.display = 'grid';
                 this.setComposeEnabled(true);
 
                 await this.loadConversationMessages(conversation.id);

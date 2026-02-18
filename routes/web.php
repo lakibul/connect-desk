@@ -11,6 +11,11 @@ use Illuminate\Support\Facades\Route;
 // Frontend landing page
 Route::get('/', [FrontendController::class, 'index'])->name('frontend');
 
+// Demo chatbox page (static data)
+Route::get('/chatbox-demo', function () {
+    return view('admin.chatbox-demo');
+})->name('chatbox.demo');
+
 // Admin routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
