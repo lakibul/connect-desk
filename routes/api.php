@@ -31,6 +31,9 @@ Route::post('/send-template', [MessageController::class, 'sendTemplateMessage'])
 Route::get('/whatsapp/webhook', [WhatsAppWebhookController::class, 'verify'])->name('whatsapp.webhook.verify');
 Route::post('/whatsapp/webhook', [WhatsAppWebhookController::class, 'handleWebhook'])->name('whatsapp.webhook.handle');
 
+// Twilio Status Callback (sent/delivered/read updates - separate from incoming messages)
+Route::post('/whatsapp/status', [WhatsAppWebhookController::class, 'handleStatus'])->name('whatsapp.status.handle');
+
 // API user info (for authenticated users)
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();

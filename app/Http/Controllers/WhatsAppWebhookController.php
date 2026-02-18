@@ -50,7 +50,30 @@ class WhatsAppWebhookController extends Controller
     }
 
     /**
+     * Handle outbound message status callbacks from Twilio
+     * (sent, delivered, read, failed - these come from the Status Callback URL)
+     */
+    public function handleStatus(Request $request)
+    {
+        $messageSid = $request->input('MessageSid');
+        $status = $request->input('MessageStatus');
+        $to = $request->input('To');
+
+        Log::info('Twilio message status update', [
+            'message_sid' => $messageSid,
+            'status' => $status,
+            'to' => $to,
+        ]);
+
+        // Respond with empty TwiML
+        return response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200)
+            ->header('Content-Type', 'text/xml');
+    }
+
+    /**
      * Handle incoming Twilio WhatsApp webhook messages
+     * This is triggered when a USER sends a message TO your Twilio number.
+     * From = user's WhatsApp number, To = your Twilio sandbox number.
      */
     public function handleWebhook(Request $request)
     {
@@ -61,13 +84,28 @@ class WhatsAppWebhookController extends Controller
 
             // Twilio sends data as form data, not JSON
             $messageSid = $request->input('MessageSid');
-            $from = $request->input('From'); // Format: whatsapp:+8801XXXXXXXXX
-            $to = $request->input('To'); // Format: whatsapp:+14155238886
+            $from = $request->input('From'); // Format: whatsapp:+8801XXXXXXXXX (user's number)
+            $to = $request->input('To');     // Format: whatsapp:+14155238886 (Twilio sandbox)
             $body = $request->input('Body');
             $numMedia = (int) $request->input('NumMedia', 0);
             $profileName = $request->input('ProfileName');
+            $messageStatus = $request->input('MessageStatus');
 
-            Log::info('Twilio WhatsApp message received', [
+            // ---------------------------------------------------------------
+            // IMPORTANT: Skip outbound status callbacks (sent/delivered/read).
+            // Status callbacks have MessageStatus set and come FROM your Twilio
+            // number. Real incoming messages come FROM the user's number.
+            // ---------------------------------------------------------------
+            if (!empty($messageStatus)) {
+                Log::info('Twilio status callback received (not an incoming message), skipping.', [
+                    'message_sid' => $messageSid,
+                    'status' => $messageStatus,
+                ]);
+                return response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200)
+                    ->header('Content-Type', 'text/xml');
+            }
+
+            Log::info('Twilio incoming WhatsApp message received', [
                 'message_sid' => $messageSid,
                 'from' => $from,
                 'to' => $to,
@@ -76,48 +114,55 @@ class WhatsAppWebhookController extends Controller
                 'profile_name' => $profileName,
             ]);
 
-            // Extract phone number from whatsapp: prefix
-            $senderPhone = str_replace('whatsapp:', '', $from);
-            $senderPhone = ltrim($senderPhone, '+'); // Remove + for consistency
+            // Extract phone number - keep the + prefix for E.164 consistency
+            // with how admin stores numbers (sanitizePhoneNumber returns +XXXX format)
+            $senderPhone = str_replace('whatsapp:', '', $from); // e.g. +8801983427887
+            $senderPhoneWithPlus = $senderPhone; // keep with + prefix
+            $senderPhoneNoPlus = ltrim($senderPhone, '+'); // without + prefix
 
-            if (empty($senderPhone)) {
+            if (empty($senderPhoneNoPlus)) {
                 Log::warning('Twilio webhook: sender phone is empty');
                 return response('Bad Request', 400);
             }
 
-            // Find or create conversation
-            // First try to find existing conversation by phone number (created by admin)
-            $conversation = Conversation::where('visitor_phone', $senderPhone)
-                ->where('platform', 'whatsapp')
+            // Find existing conversation - check BOTH phone formats (+XXXX and XXXX)
+            // Admin-created conversations store visitor_phone as +8801XXXXXXXXX (with +)
+            // Webhook-created conversations may have stored without +
+            $conversation = Conversation::where('platform', 'whatsapp')
+                ->where(function ($query) use ($senderPhoneWithPlus, $senderPhoneNoPlus) {
+                    $query->where('visitor_phone', $senderPhoneWithPlus)
+                          ->orWhere('visitor_phone', $senderPhoneNoPlus)
+                          ->orWhere('visitor_id', 'whatsapp_' . $senderPhoneWithPlus)
+                          ->orWhere('visitor_id', 'whatsapp_' . $senderPhoneNoPlus);
+                })
                 ->first();
 
-            // If not found, try by visitor_id
             if (!$conversation) {
-                $conversation = Conversation::where('visitor_id', 'whatsapp_' . $senderPhone)
-                    ->where('platform', 'whatsapp')
-                    ->first();
-            }
-
-            // If still not found, create new conversation
-            if (!$conversation) {
+                // No existing conversation — create a new one
                 $conversation = Conversation::create([
-                    'visitor_id' => 'whatsapp_' . $senderPhone,
-                    'visitor_name' => $profileName ?: $senderPhone,
-                    'visitor_phone' => $senderPhone,
-                    'platform' => 'whatsapp',
+                    'visitor_id'   => 'whatsapp_' . $senderPhoneNoPlus,
+                    'visitor_name' => $profileName ?: $senderPhoneNoPlus,
+                    'visitor_phone' => $senderPhoneWithPlus, // store with + prefix (E.164)
+                    'platform'     => 'whatsapp',
                     'unread_count' => 0,
                 ]);
+                Log::info('Twilio webhook: created new conversation', ['conversation_id' => $conversation->id]);
             } else {
-                // Update visitor info if not set
+                // Update visitor info if missing
+                $updates = [];
                 if (empty($conversation->visitor_phone)) {
-                    $conversation->visitor_phone = $senderPhone;
+                    $updates['visitor_phone'] = $senderPhoneWithPlus;
                 }
                 if (empty($conversation->visitor_name) && !empty($profileName)) {
-                    $conversation->visitor_name = $profileName;
+                    $updates['visitor_name'] = $profileName;
                 }
                 if (empty($conversation->visitor_id)) {
-                    $conversation->visitor_id = 'whatsapp_' . $senderPhone;
+                    $updates['visitor_id'] = 'whatsapp_' . $senderPhoneNoPlus;
                 }
+                if (!empty($updates)) {
+                    $conversation->update($updates);
+                }
+                Log::info('Twilio webhook: matched existing conversation', ['conversation_id' => $conversation->id]);
             }
 
             // Handle message body

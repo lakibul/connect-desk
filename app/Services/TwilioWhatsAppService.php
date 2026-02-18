@@ -363,6 +363,8 @@ class TwilioWhatsAppService
 
             'welcome_message' => "🌟 Welcome! Thank you for connecting with us. We're excited to serve you. Feel free to ask any questions!",
 
+            'welcome_bangla_message' => "আমার মুরাদনগরে আপনাকে স্বাগতম। আপনার সকল সেবার প্রয়োজন পূরণে আমরা সর্বদা প্রস্তুত।\n\nযেকোনো প্রয়োজনে আমাদের সাথে যোগাযোগ করুন:\n📞 কল করুন: +8801234567890\n💬 অথবা হোয়াটসঅ্যাপে যোগাযোগ করুন।\n\nআমাদের সাপোর্ট টিম ২৪/৭ আপনার সেবায় নিয়োজিত।",
+
             'thank_you' => "🙏 Thank you for contacting us! We appreciate your message and will get back to you shortly.",
 
             'appointment_reminder' => "📅 Reminder: You have an appointment scheduled. Please confirm your attendance or reschedule if needed.",
