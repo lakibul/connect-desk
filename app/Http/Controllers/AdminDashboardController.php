@@ -178,12 +178,7 @@ class AdminDashboardController extends Controller
             // Send FAQ menu (plain-text, works in Twilio Sandbox)
             $result = $this->whatsappService->sendFaqMessage($formattedNumber, null, $admin);
             $sent = $result['success'] ?? false;
-            $faqs = $this->whatsappService->getDefaultFaqs();
-            $messageContent  = "📋 *Frequently Asked Questions*\n━━━━━━━━━━━━━━━━━━━━\n\nReply with the *number* of your question:\n\n";
-            foreach ($faqs as $key => $item) {
-                $messageContent .= "*{$key}.* {$item['question']}\n";
-            }
-            $messageContent .= "\n━━━━━━━━━━━━━━━━━━━━\n_Type *FAQ* anytime to see this menu again._";
+            $messageContent = $this->whatsappService->buildFaqMenuText($this->whatsappService->getDefaultFaqs());
         }
 
         if ($sent) {

@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Faq;
+use App\Models\MessageTemplate;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Twilio\Rest\Client;
@@ -346,28 +348,32 @@ class TwilioWhatsAppService
      */
     public function getPredefinedTemplateMessage(string $templateName): ?string
     {
+        // Try loading from DB first (managed templates).
+        try {
+            $dbTemplate = MessageTemplate::where('name', $templateName)
+                ->where('is_active', true)
+                ->first();
+            if ($dbTemplate) {
+                return $dbTemplate->content;
+            }
+        } catch (\Exception $e) {
+            // DB may not be migrated yet — fall through to hardcoded defaults.
+            Log::warning('MessageTemplate DB lookup failed, using hardcoded fallback: ' . $e->getMessage());
+        }
+
+        // Hardcoded fallback (used before seeding or if DB is unavailable).
         $templates = [
-            'hello_world' => "👋 Hello! Welcome to our service. We're here to help you. How can we assist you today?",
-
-            'sample_purchase_feedback' => "🛍️ Thank you for your recent purchase! We'd love to hear your feedback. How was your experience with us?",
-
-            'sample_happy_hour_announcement' => "🎉 Special Offer! Join us for Happy Hour today! Enjoy exclusive deals and discounts. Don't miss out!",
-
-            'sample_flight_confirmation' => "✈️ Flight Confirmation: Your booking has been confirmed. Check your email for details. Have a safe journey!",
-
-            'sample_movie_ticket_confirmation' => "🎬 Movie Ticket Confirmed! Your booking is successful. Show this message at the counter. Enjoy the show!",
-
-            'sample_issue_resolution' => "✅ Issue Resolved: We've addressed your concern. Thank you for your patience. Is there anything else we can help with?",
-
-            'sample_shipping_confirmation' => "📦 Shipping Update: Your order has been dispatched and is on its way. Track your package using the link in your email.",
-
-            'welcome_message' => "🌟 Welcome! Thank you for connecting with us. We're excited to serve you. Feel free to ask any questions!",
-
-            'welcome_bangla_message' => "আমার মুরাদনগরে আপনাকে স্বাগতম। আপনার সকল সেবার প্রয়োজন পূরণে আমরা সর্বদা প্রস্তুত।\n\nযেকোনো প্রয়োজনে আমাদের সাথে যোগাযোগ করুন:\n📞 কল করুন: +8801234567890\n💬 অথবা হোয়াটসঅ্যাপে যোগাযোগ করুন।\n\nআমাদের সাপোর্ট টিম ২৪/৭ আপনার সেবায় নিয়োজিত।",
-
-            'thank_you' => "🙏 Thank you for contacting us! We appreciate your message and will get back to you shortly.",
-
-            'appointment_reminder' => "📅 Reminder: You have an appointment scheduled. Please confirm your attendance or reschedule if needed.",
+            'hello_world'                        => "👋 Hello! Welcome to our service. We're here to help you. How can we assist you today?",
+            'sample_purchase_feedback'           => "🛍️ Thank you for your recent purchase! We'd love to hear your feedback. How was your experience with us?",
+            'sample_happy_hour_announcement'     => "🎉 Special Offer! Join us for Happy Hour today! Enjoy exclusive deals and discounts. Don't miss out!",
+            'sample_flight_confirmation'         => "✈️ Flight Confirmation: Your booking has been confirmed. Check your email for details. Have a safe journey!",
+            'sample_movie_ticket_confirmation'   => "🎬 Movie Ticket Confirmed! Your booking is successful. Show this message at the counter. Enjoy the show!",
+            'sample_issue_resolution'            => "✅ Issue Resolved: We've addressed your concern. Thank you for your patience. Is there anything else we can help with?",
+            'sample_shipping_confirmation'       => "📦 Shipping Update: Your order has been dispatched and is on its way. Track your package using the link in your email.",
+            'welcome_message'                    => "🌟 Welcome! Thank you for connecting with us. We're excited to serve you. Feel free to ask any questions!",
+            'welcome_bangla_message'             => "আমার মুরাদনগরে আপনাকে স্বাগতম। আপনার সকল সেবার প্রয়োজন পূরণে আমরা সর্বদা প্রস্তুত।\n\nযেকোনো প্রয়োজনে আমাদের সাথে যোগাযোগ করুন:\n📞 কল করুন: +8801234567890\n💬 অথবা হোয়াটসঅ্যাপে যোগাযোগ করুন।\n\nআমাদের সাপোর্ট টিম ২৪/৭ আপনার সেবায় নিয়োজিত।",
+            'thank_you'                          => "🙏 Thank you for contacting us! We appreciate your message and will get back to you shortly.",
+            'appointment_reminder'              => "📅 Reminder: You have an appointment scheduled. Please confirm your attendance or reschedule if needed.",
         ];
 
         return $templates[$templateName] ?? null;
@@ -458,61 +464,117 @@ class TwilioWhatsAppService
     // FAQ / Interactive Message Methods
     // ---------------------------------------------------------------
 
+    /** Number-emoji map used in the FAQ buttons (1→1️⃣  … 9→9️⃣). */
+    private static array $numberEmojis = [
+        '1' => '1️⃣', '2' => '2️⃣', '3' => '3️⃣',
+        '4' => '4️⃣', '5' => '5️⃣', '6' => '6️⃣',
+        '7' => '7️⃣', '8' => '8️⃣', '9' => '9️⃣',
+    ];
+
     /**
      * Get the default FAQ list.
-     * Each key is the number the user types to select it.
+     * Each key is the number the user types / taps to select it.
      *
-     * @return array
+     * @return array<string, array{question: string, answer: string, payload: string}>
      */
     public function getDefaultFaqs(): array
     {
+        // Try loading from DB first (managed FAQs).
+        try {
+            $dbFaqs = Faq::toServiceArray();
+            if (!empty($dbFaqs)) {
+                return $dbFaqs;
+            }
+        } catch (\Exception $e) {
+            // DB may not be migrated yet — fall through to hardcoded defaults.
+            Log::warning('Faq DB lookup failed, using hardcoded fallback: ' . $e->getMessage());
+        }
+
+        // Hardcoded fallback (used before seeding or if DB is unavailable).
         return [
             '1' => [
                 'question' => 'What are your business hours?',
-                'answer'   => "🕐 *Business Hours:*\n\nMonday - Friday: 9:00 AM - 6:00 PM\nSaturday: 10:00 AM - 4:00 PM\nSunday: Closed\n\n_Reply *FAQ* anytime to see all questions._",
+                'payload'  => 'faq_business_hours',
+                'answer'   => "🕐 *Business Hours:*\n\nMonday – Friday: 9:00 AM – 6:00 PM\nSaturday: 10:00 AM – 4:00 PM\nSunday: Closed\n\n_Tap *FAQ* anytime to see all questions._",
             ],
             '2' => [
                 'question' => 'How can I track my order?',
-                'answer'   => "📦 *Order Tracking:*\n\nYou can track your order:\n• Check the confirmation email sent to you\n• Visit our website and enter your Order ID\n• Reply here with your Order ID for direct help\n\n_Reply *FAQ* anytime to see all questions._",
+                'payload'  => 'faq_track_order',
+                'answer'   => "📦 *Order Tracking:*\n\nYou can track your order:\n• Check the confirmation email sent to you\n• Visit our website and enter your Order ID\n• Reply here with your Order ID for direct help\n\n_Tap *FAQ* anytime to see all questions._",
             ],
             '3' => [
                 'question' => 'What is your return policy?',
-                'answer'   => "🔄 *Return Policy:*\n\n• Returns accepted within *30 days* of purchase\n• Item must be in original, unused condition\n• Contact us to initiate a return request\n• Refund processed within 5-7 business days\n\n_Reply *FAQ* anytime to see all questions._",
+                'payload'  => 'faq_return_policy',
+                'answer'   => "🔄 *Return Policy:*\n\n• Returns accepted within *30 days* of purchase\n• Item must be in original, unused condition\n• Contact us to initiate a return request\n• Refund processed within 5–7 business days\n\n_Tap *FAQ* anytime to see all questions._",
             ],
             '4' => [
                 'question' => 'How do I contact support?',
-                'answer'   => "💬 *Contact Support:*\n\n• *Chat:* Reply directly to this message\n• *Email:* support@connectdesk.com\n• *Website:* Live chat available\n\nOur team responds within *2 hours* during business hours. 🌟\n\n_Reply *FAQ* anytime to see all questions._",
+                'payload'  => 'faq_contact_support',
+                'answer'   => "💬 *Contact Support:*\n\n• *Chat:* Reply directly to this message\n• *Email:* support@connectdesk.com\n• *Website:* Live chat available\n\nOur team responds within *2 hours* during business hours. 🌟\n\n_Tap *FAQ* anytime to see all questions._",
             ],
             '5' => [
                 'question' => 'What payment methods do you accept?',
-                'answer'   => "💳 *Payment Methods:*\n\nWe accept:\n• Credit/Debit Cards (Visa, Mastercard)\n• Mobile Banking (bKash, Nagad, Rocket)\n• Bank Transfer\n• Cash on Delivery (selected areas)\n\nAll transactions are *secure & encrypted* 🔒\n\n_Reply *FAQ* anytime to see all questions._",
+                'payload'  => 'faq_payment_methods',
+                'answer'   => "💳 *Payment Methods:*\n\nWe accept:\n• Credit/Debit Cards (Visa, Mastercard)\n• Mobile Banking (bKash, Nagad, Rocket)\n• Bank Transfer\n• Cash on Delivery (selected areas)\n\nAll transactions are *secure & encrypted* 🔒\n\n_Tap *FAQ* anytime to see all questions._",
             ],
         ];
     }
 
     /**
-     * Send a formatted FAQ menu message to a WhatsApp number.
-     * Works in Twilio Sandbox (plain text format).
+     * Build the formatted FAQ menu text with numbered emoji "buttons".
+     * This plain-text format works in both Sandbox and Production.
+     * When a Twilio interactive Content Template is available, pass its SID
+     * to sendFaqMessage() instead.
      *
-     * @param string    $recipientPhone
-     * @param array|null $faqs  Custom FAQ list (optional, uses default if null)
-     * @param User|null  $user  Admin user for per-user Twilio credentials
-     * @return array
+     * @param array $faqList  Result of getDefaultFaqs()
+     * @return string
      */
-    public function sendFaqMessage(string $recipientPhone, array $faqs = null, ?User $user = null): array
+    public function buildFaqMenuText(array $faqList): string
     {
-        $faqList = $faqs ?? $this->getDefaultFaqs();
-
         $message  = "📋 *Frequently Asked Questions*\n";
-        $message .= "━━━━━━━━━━━━━━━━━━━━\n\n";
-        $message .= "Reply with the *number* of your question:\n\n";
+        $message .= "━━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+        $message .= "Tap a button below to get an instant answer:\n\n";
 
         foreach ($faqList as $key => $item) {
-            $message .= "*{$key}.* {$item['question']}\n";
+            $emoji    = self::$numberEmojis[$key] ?? "{$key}.";
+            $message .= "{$emoji}  {$item['question']}\n";
         }
 
-        $message .= "\n━━━━━━━━━━━━━━━━━━━━\n";
-        $message .= "_Type *FAQ* anytime to see this menu again._";
+        $message .= "\n━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        $message .= "_Reply with a number (1–" . count($faqList) . ") or type *FAQ* to see this menu again._";
+
+        return $message;
+    }
+
+    /**
+     * Send the FAQ menu to a WhatsApp number.
+     *
+     * If $contentSid is provided (a Twilio Content Template SID that contains
+     * interactive list/buttons), it will be sent as an interactive message so
+     * the user sees actual tap-able buttons in WhatsApp.
+     *
+     * Without a Content SID the system falls back to a well-formatted plain-text
+     * numbered menu that works in both Sandbox and Production.
+     *
+     * @param string      $recipientPhone
+     * @param array|null  $faqs         Custom FAQ list (uses default if null)
+     * @param User|null   $user         Admin user for per-user Twilio credentials
+     * @param string|null $contentSid   Optional Twilio Content Template SID for interactive buttons
+     * @return array
+     */
+    public function sendFaqMessage(string $recipientPhone, array $faqs = null, ?User $user = null, ?string $contentSid = null): array
+    {
+        // If a Content SID is supplied, send as a Twilio interactive template message
+        if (!empty($contentSid) && preg_match('/^HX[a-f0-9]+$/i', $contentSid)) {
+            if ($user) {
+                return $this->sendTemplateMessageForUser($user, $contentSid, [], $recipientPhone);
+            }
+            return $this->sendTemplateMessage($contentSid, [], $recipientPhone);
+        }
+
+        // Plain-text fallback (works in Sandbox & Production)
+        $faqList = $faqs ?? $this->getDefaultFaqs();
+        $message = $this->buildFaqMenuText($faqList);
 
         if ($user) {
             return $this->sendMessageForUser($user, $message, $recipientPhone);
@@ -522,20 +584,38 @@ class TwilioWhatsAppService
     }
 
     /**
-     * Get the FAQ answer for a given user reply number.
+     * Get the FAQ answer for a given user reply.
+     * Accepts a numeric string ("1"–"5"), a button payload ("faq_business_hours"),
+     * or a button display text (partial match against the question).
      *
-     * @param string     $userReply  The message the user typed (e.g. "1", "2")
-     * @param array|null $faqs       Custom FAQ list (optional)
-     * @return string|null           Formatted answer, or null if not a valid choice
+     * @param string     $userReply
+     * @param array|null $faqs
+     * @return string|null  Formatted answer text, or null if no match
      */
     public function getFaqAnswer(string $userReply, array $faqs = null): ?string
     {
         $faqList = $faqs ?? $this->getDefaultFaqs();
         $choice  = trim($userReply);
 
+        // 1. Match by numeric key ("1", "2" …)
         if (isset($faqList[$choice])) {
             $item = $faqList[$choice];
-            return "✅ *{$item['question']}*\n\n{$item['answer']}";
+            return "✅ *" . $item['question'] . "*\n\n" . $item['answer'];
+        }
+
+        // 2. Match by button payload (e.g. "faq_business_hours")
+        foreach ($faqList as $item) {
+            if (!empty($item['payload']) && strtolower($item['payload']) === strtolower($choice)) {
+                return "✅ *" . $item['question'] . "*\n\n" . $item['answer'];
+            }
+        }
+
+        // 3. Match by button text (case-insensitive substring match against the question)
+        $choiceLower = strtolower($choice);
+        foreach ($faqList as $item) {
+            if (str_contains(strtolower($item['question']), $choiceLower)) {
+                return "✅ *" . $item['question'] . "*\n\n" . $item['answer'];
+            }
         }
 
         return null;
@@ -550,12 +630,12 @@ class TwilioWhatsAppService
      */
     public function isFaqTrigger(string $message): bool
     {
-        $triggers = ['faq', 'help', 'menu', 'start', '?'];
+        $triggers = ['faq', 'help', 'menu', 'start', '?', 'hi', 'hello'];
         return in_array(strtolower(trim($message)), $triggers);
     }
 
     /**
-     * Check whether an incoming message is a valid FAQ option number.
+     * Check whether an incoming message is a valid FAQ option number or payload.
      *
      * @param string     $message
      * @param array|null $faqs
@@ -564,6 +644,20 @@ class TwilioWhatsAppService
     public function isFaqOption(string $message, array $faqs = null): bool
     {
         $faqList = $faqs ?? $this->getDefaultFaqs();
-        return isset($faqList[trim($message)]);
+        $choice  = trim($message);
+
+        // Numeric key match
+        if (isset($faqList[$choice])) {
+            return true;
+        }
+
+        // Button payload match (for Twilio interactive message replies)
+        foreach ($faqList as $item) {
+            if (!empty($item['payload']) && strtolower($item['payload']) === strtolower($choice)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

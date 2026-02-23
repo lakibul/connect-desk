@@ -391,13 +391,9 @@ class MessageController extends Controller
             ], 502);
         }
 
-        // Build the menu text for storage (same format the service sends)
-        $faqs        = $this->whatsAppService->getDefaultFaqs();
-        $menuText    = "📋 *Frequently Asked Questions*\n━━━━━━━━━━━━━━━━━━━━\n\nReply with the *number* of your question:\n\n";
-        foreach ($faqs as $key => $item) {
-            $menuText .= "*{$key}.* {$item['question']}\n";
-        }
-        $menuText .= "\n━━━━━━━━━━━━━━━━━━━━\n_Type *FAQ* anytime to see this menu again._";
+        // Build the menu text for storage using the service (same format that was sent)
+        $faqs     = $this->whatsAppService->getDefaultFaqs();
+        $menuText = $this->whatsAppService->buildFaqMenuText($faqs);
 
         $message = Message::create([
             'conversation_id' => $conversation->id,

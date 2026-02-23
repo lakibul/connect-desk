@@ -50,25 +50,7 @@ class WhatsAppWebhookController extends Controller
         return response('Bad Request', 400);
     }
 
-    /**
-     * Build the plain-text FAQ menu string (mirrors TwilioWhatsAppService::sendFaqMessage).
-     * Stored in DB so the admin sees what was auto-sent.
-     */
-    private function buildFaqMenuText(array $faqList): string
-    {
-        $message  = "📋 *Frequently Asked Questions*\n";
-        $message .= "━━━━━━━━━━━━━━━━━━━━\n\n";
-        $message .= "Reply with the *number* of your question:\n\n";
-
-        foreach ($faqList as $key => $item) {
-            $message .= "*{$key}.* {$item['question']}\n";
-        }
-
-        $message .= "\n━━━━━━━━━━━━━━━━━━━━\n";
-        $message .= "_Type *FAQ* anytime to see this menu again._";
-
-        return $message;
-    }
+    // buildFaqMenuText has been moved to TwilioWhatsAppService::buildFaqMenuText()
 
     /**
      * Handle outbound message status callbacks from Twilio
@@ -104,13 +86,21 @@ class WhatsAppWebhookController extends Controller
             ]);
 
             // Twilio sends data as form data, not JSON
-            $messageSid = $request->input('MessageSid');
-            $from = $request->input('From'); // Format: whatsapp:+8801XXXXXXXXX (user's number)
-            $to = $request->input('To');     // Format: whatsapp:+14155238886 (Twilio sandbox)
-            $body = $request->input('Body');
-            $numMedia = (int) $request->input('NumMedia', 0);
-            $profileName = $request->input('ProfileName');
+            $messageSid    = $request->input('MessageSid');
+            $from          = $request->input('From');          // whatsapp:+8801XXXXXXXXX (user)
+            $to            = $request->input('To');            // whatsapp:+14155238886 (sandbox)
+            $body          = $request->input('Body');
+            $numMedia      = (int) $request->input('NumMedia', 0);
+            $profileName   = $request->input('ProfileName');
             $messageStatus = $request->input('MessageStatus');
+
+            // Twilio interactive-message button fields
+            // ButtonPayload = the payload value configured on the button (e.g. "faq_business_hours")
+            // ButtonText    = the label shown on the button (e.g. "Business Hours")
+            // ListItemTitle = selected item from a list message
+            $buttonPayload  = $request->input('ButtonPayload');
+            $buttonText     = $request->input('ButtonText');
+            $listItemTitle  = $request->input('ListItemTitle');
 
             // ---------------------------------------------------------------
             // IMPORTANT: Skip outbound status callbacks (sent/delivered/read).
@@ -236,26 +226,56 @@ class WhatsAppWebhookController extends Controller
             $conversation->save();
 
             // ---------------------------------------------------------------
-            // FAQ Auto-Reply: Detect FAQ triggers ("faq", "help", "menu" …)
-            // or FAQ option numbers ("1", "2" … "5") and respond automatically.
-            // This works in Twilio Sandbox because replies are plain text.
+            // FAQ Auto-Reply
+            // Priority order for detecting what the user means:
+            //   1. ButtonPayload  – exact payload from an interactive button tap
+            //   2. ButtonText     – display text of the tapped button
+            //   3. ListItemTitle  – selected item from a list message
+            //   4. Body text      – plain-text number ("1"–"5") or trigger keyword
             // ---------------------------------------------------------------
+
+            // Build a Twilio service scoped to the admin that owns this conversation
+            $adminUser = $conversation->user_id ? \App\Models\User::find($conversation->user_id) : null;
             $twilioService = new TwilioWhatsAppService();
             $autoReplyText = null;
 
-            if ($twilioService->isFaqTrigger($messageBody)) {
-                // User typed a trigger keyword → send the full FAQ menu
-                $sendResult   = $twilioService->sendFaqMessage($senderPhoneWithPlus);
-                $autoReplyText = $this->buildFaqMenuText($twilioService->getDefaultFaqs());
-                Log::info('FAQ menu auto-sent', ['to' => $senderPhoneWithPlus, 'result' => $sendResult]);
+            // Determine the effective "reply key" from the highest-priority source
+            $replyKey = $buttonPayload ?? $buttonText ?? $listItemTitle ?? $messageBody;
+
+            if (!empty($buttonPayload) || !empty($buttonText) || !empty($listItemTitle)) {
+                // ── Interactive button / list reply ──────────────────────────
+                $answer = $twilioService->getFaqAnswer($replyKey);
+                if ($answer) {
+                    $result = $adminUser
+                        ? $twilioService->sendMessageForUser($adminUser, $answer, $senderPhoneWithPlus)
+                        : $twilioService->sendMessage($answer, $senderPhoneWithPlus);
+                    $autoReplyText = $answer;
+                    Log::info('FAQ button answer auto-sent', [
+                        'payload' => $buttonPayload,
+                        'text'    => $buttonText,
+                        'to'      => $senderPhoneWithPlus,
+                    ]);
+                }
+            } elseif ($twilioService->isFaqTrigger($messageBody)) {
+                // ── Trigger keyword (faq / help / menu / hi / hello) ─────────
+                $result = $adminUser
+                    ? $twilioService->sendFaqMessage($senderPhoneWithPlus, null, $adminUser)
+                    : $twilioService->sendFaqMessage($senderPhoneWithPlus);
+                $autoReplyText = $twilioService->buildFaqMenuText($twilioService->getDefaultFaqs());
+                Log::info('FAQ menu auto-sent', ['to' => $senderPhoneWithPlus, 'result' => $result]);
 
             } elseif ($twilioService->isFaqOption($messageBody)) {
-                // User typed a valid FAQ option number → send the answer
+                // ── Plain-text number reply ("1" … "5") ─────────────────────
                 $answer = $twilioService->getFaqAnswer($messageBody);
                 if ($answer) {
-                    $sendResult   = $twilioService->sendMessage($answer, $senderPhoneWithPlus);
+                    $result = $adminUser
+                        ? $twilioService->sendMessageForUser($adminUser, $answer, $senderPhoneWithPlus)
+                        : $twilioService->sendMessage($answer, $senderPhoneWithPlus);
                     $autoReplyText = $answer;
-                    Log::info('FAQ answer auto-sent', ['choice' => trim($messageBody), 'to' => $senderPhoneWithPlus]);
+                    Log::info('FAQ answer auto-sent (plain text)', [
+                        'choice' => trim($messageBody),
+                        'to'     => $senderPhoneWithPlus,
+                    ]);
                 }
             }
 
