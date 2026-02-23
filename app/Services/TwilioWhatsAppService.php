@@ -344,7 +344,7 @@ class TwilioWhatsAppService
      * @param string $templateName
      * @return string|null
      */
-    protected function getPredefinedTemplateMessage(string $templateName): ?string
+    public function getPredefinedTemplateMessage(string $templateName): ?string
     {
         $templates = [
             'hello_world' => "👋 Hello! Welcome to our service. We're here to help you. How can we assist you today?",

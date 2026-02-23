@@ -17,6 +17,9 @@ Route::middleware(['web'])->group(function () {
 // Message endpoints (CSRF-protected since called from browser with form data)
 Route::post('/messages', [MessageController::class, 'store'])->name('messages.store');
 
+// Authenticated user: fetch own WhatsApp conversation + messages
+Route::middleware(['web', 'auth'])->get('/conversations/mine', [MessageController::class, 'getMyConversation'])->name('conversations.mine');
+
 // WhatsApp test endpoint (for testing integration)
 Route::post('/test-whatsapp', [MessageController::class, 'testWhatsApp'])->name('test.whatsapp');
 

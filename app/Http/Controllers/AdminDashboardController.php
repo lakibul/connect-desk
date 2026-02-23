@@ -153,7 +153,7 @@ class AdminDashboardController extends Controller
         $result = [];
 
         if ($messageType === 'template' && !empty($templateName)) {
-            // Send template message (templateName is actually templateSid for Twilio)
+            // Send template message (templateName is a predefined name or a Twilio Content SID)
             $result = $this->whatsappService->sendTemplateMessageForUser(
                 $admin,
                 $templateName,
@@ -161,7 +161,10 @@ class AdminDashboardController extends Controller
                 $formattedNumber
             );
             $sent = $result['success'] ?? false;
-            $messageContent = "Template: {$templateName}";
+            // Store the actual message body so the frontend widget shows real content.
+            // For Twilio Content SIDs (HX...) we only have the SID; for predefined names we have the text.
+            $predefinedBody = $this->whatsappService->getPredefinedTemplateMessage($templateName);
+            $messageContent = $predefinedBody ?? "[Template: {$templateName}]";
         } elseif ($messageType === 'text' && !empty($initialMessage)) {
             // Send text message
             $result = $this->whatsappService->sendMessageForUser(

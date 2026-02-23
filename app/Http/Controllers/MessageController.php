@@ -35,93 +35,147 @@ class MessageController extends Controller
                 ], 422);
             }
 
-            // Get the user
             $user = User::findOrFail($request->user_id);
 
-            // Create visitor_id based on user
-            $visitorId = 'user_' . $user->id;
+            // For WhatsApp, find the existing conversation by phone number so
+            // frontend replies land in the same thread the admin is watching.
+            $conversation = null;
+            if ($request->platform === 'whatsapp' && !empty($user->phone_number)) {
+                $phone             = $user->phone_number;
+                $phoneWithPlus     = Str::startsWith($phone, '+') ? $phone : '+' . $phone;
+                $phoneNoPlus       = ltrim($phone, '+');
+                $phoneNormalized   = $this->whatsAppService->sanitizePhoneNumber($phone);
+                $phoneNormNoPlus   = $phoneNormalized ? ltrim($phoneNormalized, '+') : null;
 
-            // Find or create conversation
-            $conversation = Conversation::firstOrCreate(
-                ['visitor_id' => $visitorId, 'platform' => $request->platform],
-                [
-                    'visitor_name' => $user->name,
+                $conversation = Conversation::where('platform', 'whatsapp')
+                    ->where(function ($q) use ($phoneWithPlus, $phoneNoPlus, $phoneNormalized, $phoneNormNoPlus, $user) {
+                        $q->where('visitor_phone', $phoneWithPlus)
+                          ->orWhere('visitor_phone', $phoneNoPlus)
+                          ->orWhere('visitor_id', 'whatsapp_' . $phoneWithPlus)
+                          ->orWhere('visitor_id', 'whatsapp_' . $phoneNoPlus)
+                          ->orWhere('visitor_id', 'user_' . $user->id);
+
+                        if ($phoneNormalized && $phoneNormalized !== $phoneWithPlus) {
+                            $q->orWhere('visitor_phone', $phoneNormalized)
+                              ->orWhere('visitor_id', 'whatsapp_' . $phoneNormalized);
+                        }
+                        if ($phoneNormNoPlus && $phoneNormNoPlus !== $phoneNoPlus) {
+                            $q->orWhere('visitor_phone', $phoneNormNoPlus)
+                              ->orWhere('visitor_id', 'whatsapp_' . $phoneNormNoPlus);
+                        }
+                    })
+                    ->first();
+            }
+
+            if (!$conversation) {
+                // No existing conversation — create one with phone-based visitor_id
+                $phone         = $user->phone_number ?? '';
+                $phoneWithPlus = $phone ? (Str::startsWith($phone, '+') ? $phone : '+' . $phone) : null;
+                $visitorId     = $phoneWithPlus ? ('whatsapp_' . $phoneWithPlus) : ('user_' . $user->id);
+
+                $conversation = Conversation::create([
+                    'visitor_id'    => $visitorId,
+                    'visitor_name'  => $user->name,
                     'visitor_email' => $user->email,
-                    'visitor_phone' => $user->phone_number,
-                    'unread_count' => 0,
-                ]
-            );
-            if (empty($conversation->visitor_phone) && !empty($user->phone_number)) {
+                    'visitor_phone' => $phoneWithPlus ?? $user->phone_number,
+                    'platform'      => $request->platform,
+                    'unread_count'  => 0,
+                ]);
+            } elseif (empty($conversation->visitor_phone) && !empty($user->phone_number)) {
                 $conversation->update(['visitor_phone' => $user->phone_number]);
             }
 
-            // Create message
+            // Store the user's actual message text
             $message = Message::create([
                 'conversation_id' => $conversation->id,
-                'user_id' => $user->id,
-                'message' => $request->message,
-                'sender_type' => 'visitor',
-                'platform' => $request->platform,
-                'is_read' => false,
+                'user_id'         => $user->id,
+                'message'         => $request->message,
+                'sender_type'     => 'visitor',
+                'platform'        => $request->platform,
+                'is_read'         => false,
             ]);
 
-            // Send WhatsApp message if platform is WhatsApp
-            $whatsappSent = false;
-            if ($request->platform === 'whatsapp') {
-                $whatsappMessage = "🔔 New ConnectDesk Message\n\n" .
-                                 "From: {$user->name}\n" .
-                                 "Email: {$user->email}\n" .
-                                 "Phone: {$user->phone_number}\n\n" .
-                                 "Message:\n{$request->message}\n\n" .
-                                 "---\nSent via ConnectDesk Platform";
-
-                // Get target phone from config (admin's phone number)
-                $targetPhone = config('services.twilio.target_phone_number');
-
-                // Send to the target WhatsApp number via Twilio
-                $result = $this->whatsAppService->sendMessage(
-                    $whatsappMessage,
-                    $targetPhone,
-                    $user->phone_number  // user's phone as sender context
-                );
-
-                $whatsappSent = $result['success'] ?? false;
-
-                if (!$whatsappSent) {
-                    \Log::warning('Failed to send WhatsApp message via Twilio', [
-                        'user_id' => $user->id,
-                        'message_id' => $message->id,
-                        'user_name' => $user->name,
-                        'user_phone' => $user->phone_number,
-                        'target_number' => $targetPhone,
-                        'error' => $result['error'] ?? 'Unknown error',
-                    ]);
-                }
-            }            // Update conversation
             $conversation->update([
                 'last_message_at' => now(),
-                'unread_count' => $conversation->unread_count + 1,
+                'unread_count'    => $conversation->unread_count + 1,
             ]);
 
             return response()->json([
-                'success' => true,
-                'message' => $message->load('user'),
-                'whatsapp_sent' => $whatsappSent,
+                'success'         => true,
+                'message'         => $message,
                 'conversation_id' => $conversation->id,
             ], 201);
 
         } catch (\Exception $e) {
             \Log::error('Error storing message', [
-                'error' => $e->getMessage(),
-                'request' => $request->all()
+                'error'   => $e->getMessage(),
+                'request' => $request->all(),
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to send message',
-                'error' => $e->getMessage()
+                'error'   => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Return the WhatsApp conversation + messages for the currently
+     * authenticated website user (matched by their phone number).
+     */
+    public function getMyConversation(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated'], 401);
+        }
+
+        $phone = $user->phone_number ?? '';
+        if (empty($phone)) {
+            return response()->json(['success' => true, 'messages' => [], 'conversation_id' => null]);
+        }
+
+        // Build a set of all plausible phone variants so local-format registrations
+        // (e.g. 01983427887 → +8801983427887) still match admin-initiated conversations.
+        $phoneWithPlus     = Str::startsWith($phone, '+') ? $phone : '+' . $phone;
+        $phoneNoPlus       = ltrim($phone, '+');
+        $phoneNormalized   = $this->whatsAppService->sanitizePhoneNumber($phone);
+        $phoneNormNoPlus   = $phoneNormalized ? ltrim($phoneNormalized, '+') : null;
+
+        $conversation = Conversation::where('platform', 'whatsapp')
+            ->where(function ($q) use ($phoneWithPlus, $phoneNoPlus, $phoneNormalized, $phoneNormNoPlus, $user) {
+                $q->where('visitor_phone', $phoneWithPlus)
+                  ->orWhere('visitor_phone', $phoneNoPlus)
+                  ->orWhere('visitor_id', 'whatsapp_' . $phoneWithPlus)
+                  ->orWhere('visitor_id', 'whatsapp_' . $phoneNoPlus)
+                  ->orWhere('visitor_id', 'user_' . $user->id);
+
+                // Also search using the E.164-normalized variant (handles 01xxxxxxxxx etc.)
+                if ($phoneNormalized && $phoneNormalized !== $phoneWithPlus) {
+                    $q->orWhere('visitor_phone', $phoneNormalized)
+                      ->orWhere('visitor_id', 'whatsapp_' . $phoneNormalized);
+                }
+                if ($phoneNormNoPlus && $phoneNormNoPlus !== $phoneNoPlus) {
+                    $q->orWhere('visitor_phone', $phoneNormNoPlus)
+                      ->orWhere('visitor_id', 'whatsapp_' . $phoneNormNoPlus);
+                }
+            })
+            ->first();
+
+        if (!$conversation) {
+            return response()->json(['success' => true, 'messages' => [], 'conversation_id' => null]);
+        }
+
+        $messages = $conversation->messages()
+            ->orderBy('created_at', 'asc')
+            ->get(['id', 'message', 'sender_type', 'created_at']);
+
+        return response()->json([
+            'success'         => true,
+            'messages'        => $messages,
+            'conversation_id' => $conversation->id,
+        ]);
     }
 
     public function sendAdminMessage(Request $request, Conversation $conversation)

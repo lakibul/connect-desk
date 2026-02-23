@@ -126,6 +126,7 @@
     <div class="chat-floating-buttons">
         <div class="chat-trigger whatsapp-trigger" onclick="toggleChat('whatsapp')">
             <i class="bi bi-whatsapp"></i>
+            <span id="whatsapp-unread-badge" class="wa-unread-badge" style="display:none;">0</span>
             <div class="chat-tooltip">Chat via WhatsApp</div>
         </div>
         <div class="chat-trigger facebook-trigger" onclick="toggleChat('facebook')">
@@ -292,6 +293,17 @@
         let currentPlatform = null;
         let messagesCache = {};
         const floatingButtons = document.querySelector('.chat-floating-buttons');
+
+        // WhatsApp conversation state
+        let whatsappConversationId = null;
+        let messagePollingInterval = null;
+        let lastMessageId = 0;
+        let isLoadingMessages = false;
+
+        // Badge / unread-count state
+        let whatsappUnreadCount = 0;
+        let lastSeenMessageId = 0;
+        let badgePollingInterval = null;
 
         function updateFloatingButtonsVisibility() {
             if (!floatingButtons) return;
@@ -466,7 +478,6 @@
 
         // Chat Widget Management
         function toggleChat(platform) {
-            // Check if user is authenticated
             if (!currentUser) {
                 showModal();
                 return;
@@ -476,24 +487,34 @@
             const otherPlatform = platform === 'whatsapp' ? 'facebook' : 'whatsapp';
             const otherWidget = document.getElementById(`${otherPlatform}-widget`);
 
-            // Close other widget
             otherWidget.classList.remove('active');
-
-            // Toggle current widget
             widget.classList.toggle('active');
 
             if (widget.classList.contains('active')) {
                 currentPlatform = platform;
 
-                // Update chat header with user's phone number if WhatsApp
                 if (platform === 'whatsapp') {
+                    // Stop badge polling — widget is now open
+                    stopBadgePolling();
+                    updateUnreadBadge(0);
                     updateWhatsAppHeader();
-                }
+                    loadMessages('whatsapp', true);
 
-                loadMessages(platform);
-                focusInput(platform);
+                    // Poll for new messages every 5 seconds while widget is open
+                    if (!messagePollingInterval) {
+                        messagePollingInterval = setInterval(() => {
+                            if (currentPlatform === 'whatsapp') pollNewMessages();
+                        }, 5000);
+                    }
+                } else {
+                    focusInput(platform);
+                }
             } else {
                 currentPlatform = null;
+                clearInterval(messagePollingInterval);
+                messagePollingInterval = null;
+                // Resume badge polling when widget closes
+                if (platform === 'whatsapp') startBadgePolling();
             }
 
             updateFloatingButtonsVisibility();
@@ -512,6 +533,10 @@
         function closeChat(platform) {
             document.getElementById(`${platform}-widget`).classList.remove('active');
             currentPlatform = null;
+            clearInterval(messagePollingInterval);
+            messagePollingInterval = null;
+            // Resume badge polling when chat is closed
+            if (platform === 'whatsapp') startBadgePolling();
             updateFloatingButtonsVisibility();
         }
 
@@ -552,10 +577,8 @@
 
             const input = document.getElementById(`${platform}-input`);
             const message = input.value.trim();
-
             if (!message) return;
 
-            // Disable input temporarily
             input.disabled = true;
             const sendBtn = document.getElementById(`${platform}-send`);
             sendBtn.style.opacity = '0.5';
@@ -577,33 +600,12 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    // Add message to UI
-                    addMessageToUI(platform, message, 'sent');
-
-                    // Clear input
+                    if (data.conversation_id) whatsappConversationId = data.conversation_id;
                     input.value = '';
                     input.style.height = 'auto';
                     toggleSendButton(platform);
-
-                    // Show WhatsApp sent status if applicable
-                    if (platform === 'whatsapp') {
-                        if (data.whatsapp_sent) {
-                            showSuccessMessage(platform, `✅ Message sent via WhatsApp to +8801604509006`);
-                        } else {
-                            showWarningMessage(platform, '⚠️ Message stored but WhatsApp sending failed. Please try again.');
-                        }
-                    } else {
-                        showSuccessMessage(platform, 'Message sent!');
-                    }
-
-                    // Simulate admin response (for demo)
-                    setTimeout(() => {
-                        showTypingIndicator(platform);
-                        setTimeout(() => {
-                            hideTypingIndicator(platform);
-                            addAdminResponse(platform);
-                        }, 2000);
-                    }, 1000);
+                    // Reload full conversation so the sent message appears instantly
+                    await loadMessages(platform, false);
                 } else {
                     showErrorMessage(platform, data.message || 'Failed to send message');
                 }
@@ -611,78 +613,9 @@
                 console.error('Error sending message:', error);
                 showErrorMessage(platform, 'Failed to send message. Please try again.');
             } finally {
-                // Re-enable input
                 input.disabled = false;
                 sendBtn.style.opacity = '1';
                 input.focus();
-            }
-        }
-
-        function addMessageToUI(platform, message, type) {
-            const messagesDiv = document.getElementById(`${platform}-messages`);
-
-            // Remove welcome message if exists
-            const welcomeMessage = messagesDiv.querySelector('.welcome-message');
-            if (welcomeMessage) {
-                welcomeMessage.remove();
-            }
-
-            const messageEl = document.createElement('div');
-            messageEl.className = `message-bubble message-${type} message-enter`;
-
-            if (type === 'sent') {
-                messageEl.classList.add(platform === 'whatsapp' ? 'whatsapp-sent' : 'facebook-sent');
-            }
-
-            const messageContent = document.createElement('div');
-            messageContent.textContent = message;
-
-            const messageTime = document.createElement('div');
-            messageTime.className = 'message-time';
-            messageTime.textContent = getCurrentTime();
-
-            messageEl.appendChild(messageContent);
-            messageEl.appendChild(messageTime);
-            messagesDiv.appendChild(messageEl);
-
-            scrollToBottom(messagesDiv);
-        }
-
-        function addAdminResponse(platform) {
-            const responses = [
-                "Thanks for reaching out! How can I assist you today?",
-                "I've received your message. Let me help you with that.",
-                "Hello! I'm here to help. What can I do for you?",
-                "Thanks for contacting us. I'll be happy to assist you."
-            ];
-
-            const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-            addMessageToUI(platform, randomResponse, 'received');
-        }
-
-        function showTypingIndicator(platform) {
-            const messagesDiv = document.getElementById(`${platform}-messages`);
-
-            const typingEl = document.createElement('div');
-            typingEl.className = 'typing-indicator';
-            typingEl.innerHTML = `
-                <div class="typing-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-                <span>Support is typing...</span>
-            `;
-
-            messagesDiv.appendChild(typingEl);
-            scrollToBottom(messagesDiv);
-        }
-
-        function hideTypingIndicator(platform) {
-            const messagesDiv = document.getElementById(`${platform}-messages`);
-            const typingIndicator = messagesDiv.querySelector('.typing-indicator');
-            if (typingIndicator) {
-                typingIndicator.remove();
             }
         }
 
@@ -714,27 +647,177 @@
         }
 
         // Utility Functions
-        function getCurrentTime() {
-            return new Date().toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-            });
-        }
-
         function scrollToBottom(element) {
             element.scrollTop = element.scrollHeight;
         }
 
-        async function loadMessages(platform) {
-            // In a real implementation, this would load existing messages
-            // For now, we'll just ensure the welcome message is visible if no messages exist
-            const messagesDiv = document.getElementById(`${platform}-messages`);
-            const hasMessages = messagesDiv.querySelector('.message-bubble');
+        async function loadMessages(platform, focusAfter = false) {
+            if (!currentUser || platform !== 'whatsapp') return;
+            if (isLoadingMessages) return;
+            isLoadingMessages = true;
 
-            if (!hasMessages) {
-                // Welcome message is already in HTML, no need to add it
+            try {
+                const response = await fetch('/api/conversations/mine', {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                });
+
+                if (!response.ok) return;
+                const data = await response.json();
+
+                if (data.success) {
+                    whatsappConversationId = data.conversation_id;
+                    const msgs = data.messages || [];
+                    lastMessageId = msgs.length ? msgs[msgs.length - 1].id : 0;
+                    // Mark everything seen — clear the badge
+                    lastSeenMessageId = lastMessageId;
+                    updateUnreadBadge(0);
+                    renderConversationMessages(platform, msgs);
+                    if (focusAfter) focusInput(platform);
+                }
+            } catch (err) {
+                console.error('loadMessages error:', err);
+            } finally {
+                isLoadingMessages = false;
             }
+        }
+
+        async function pollNewMessages() {
+            // Always poll — don't gate on whatsappConversationId so we catch
+            // admin-initiated conversations even before the user sends anything.
+            if (!currentUser || isLoadingMessages) return;
+            try {
+                const response = await fetch('/api/conversations/mine', {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+
+                if (data.success) {
+                    const msgs = data.messages || [];
+                    const newLastId = msgs.length ? msgs[msgs.length - 1].id : 0;
+                    if (newLastId !== lastMessageId) {
+                        lastMessageId = newLastId;
+                        if (data.conversation_id) whatsappConversationId = data.conversation_id;
+                        renderConversationMessages('whatsapp', msgs);
+                    }
+                }
+            } catch (_) { /* silent */ }
+        }
+
+        // ---------- Badge helpers ----------
+        function updateUnreadBadge(count) {
+            whatsappUnreadCount = count;
+            const badge = document.getElementById('whatsapp-unread-badge');
+            if (!badge) return;
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.style.display = 'flex';
+                badge.classList.remove('badge-pop');
+                void badge.offsetWidth; // reflow to restart animation
+                badge.classList.add('badge-pop');
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function startBadgePolling() {
+            if (!currentUser) return;
+            stopBadgePolling();
+            badgePollingInterval = setInterval(async () => {
+                // Only count when the widget is closed
+                if (currentPlatform === 'whatsapp') return;
+                try {
+                    const response = await fetch('/api/conversations/mine', {
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        }
+                    });
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    if (data.success) {
+                        const msgs = data.messages || [];
+                        const newCount = msgs.filter(m => m.sender_type === 'admin' && m.id > lastSeenMessageId).length;
+                        updateUnreadBadge(newCount);
+                    }
+                } catch (_) { /* silent */ }
+            }, 10000);
+        }
+
+        function stopBadgePolling() {
+            if (badgePollingInterval) {
+                clearInterval(badgePollingInterval);
+                badgePollingInterval = null;
+            }
+        }
+        // ---------- End badge helpers ----------
+
+        function renderConversationMessages(platform, messages) {
+            const messagesDiv = document.getElementById(`${platform}-messages`);
+
+            // Remember scroll position — only auto-scroll if already near bottom
+            const wasAtBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 80;
+
+            messagesDiv.innerHTML = '';
+
+            if (!messages.length) {
+                messagesDiv.innerHTML = `
+                    <div class="welcome-message">
+                        <div class="welcome-title">👋 Hi there!</div>
+                        <div class="welcome-text">No messages yet. Send us a message and we'll reply soon!</div>
+                    </div>`;
+                return;
+            }
+
+            let lastDateLabel = null;
+            messages.forEach(msg => {
+                const isAdmin = msg.sender_type === 'admin';
+
+                // Date separator (same as admin dashboard behaviour)
+                const msgDate = msg.created_at
+                    ? new Date((msg.created_at.includes('T') ? msg.created_at : msg.created_at.replace(' ', 'T')))
+                    : null;
+                if (msgDate) {
+                    const dateLabel = msgDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                    if (dateLabel !== lastDateLabel) {
+                        lastDateLabel = dateLabel;
+                        const sep = document.createElement('div');
+                        sep.className = 'msg-date-sep';
+                        sep.textContent = dateLabel;
+                        messagesDiv.appendChild(sep);
+                    }
+                }
+
+                const el = document.createElement('div');
+                el.className = `message-bubble ${isAdmin ? 'message-received' : 'message-sent whatsapp-sent'}`;
+                el.innerHTML = `
+                    <div class="msg-sender-label">${isAdmin ? '<i class="bi bi-headset"></i> Support' : '<i class="bi bi-person-fill"></i> You'}</div>
+                    <div class="msg-text">${formatMsgText(msg.message)}</div>
+                    <div class="message-time">${formatMsgTime(msg.created_at)}</div>`;
+                messagesDiv.appendChild(el);
+            });
+
+            if (wasAtBottom) scrollToBottom(messagesDiv);
+        }
+
+        function formatMsgText(text) {
+            return String(text)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/\n/g, '<br>')
+                .replace(/\*([^*<]+)\*/g, '<strong>$1</strong>')
+                .replace(/_([^_<]+)_/g, '<em>$1</em>');
+        }
+
+        function formatMsgTime(ts) {
+            if (!ts) return '';
+            const val = ts.includes('T') ? ts : ts.replace(' ', 'T');
+            return new Date(val).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
         }
 
         function showSuccessMessage(platform, message) {
@@ -872,6 +955,24 @@
             // Initialize user interface based on current state
             initializeUserInterface();
             updateFloatingButtonsVisibility();
+
+            // Badge: fetch baseline so we only count NEW messages from this point
+            if (currentUser) {
+                fetch('/api/conversations/mine', {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                }).then(r => r.ok ? r.json() : null)
+                  .then(data => {
+                      if (data && data.success) {
+                          const msgs = data.messages || [];
+                          lastSeenMessageId = msgs.length ? msgs[msgs.length - 1].id : 0;
+                      }
+                      startBadgePolling();
+                  })
+                  .catch(() => startBadgePolling());
+            }
             // Add smooth scrolling to hero section
             document.querySelectorAll('a[href^="#"]').forEach(anchor => {
                 anchor.addEventListener('click', function (e) {
@@ -904,59 +1005,89 @@
             });
         });
 
-        // Real-time updates (enhanced version)
-        setInterval(() => {
-            if (currentPlatform && visitorId) {
-                // This would poll for new messages from admin
-                // Implementation depends on your real-time strategy (WebSockets, Server-Sent Events, etc.)
-            }
-        }, 3000);
+        // Real-time polling is handled per-widget in toggleChat / pollNewMessages
 
-        // Add CSS animations for entrance effects
+        // Add CSS for chat messages and animations
         const style = document.createElement('style');
         style.textContent = `
-            .typing-indicator {
+            /* Sender label above each bubble */
+            .msg-sender-label {
+                font-size: 0.68rem;
+                font-weight: 600;
+                margin-bottom: 3px;
+                opacity: 0.75;
                 display: flex;
                 align-items: center;
-                gap: 0.5rem;
-                padding: 0.75rem;
-                background: white;
-                border-radius: 12px;
+                gap: 3px;
+            }
+            .message-received .msg-sender-label { color: #059669; justify-content: flex-start; }
+            .message-sent     .msg-sender-label { color: rgba(255,255,255,0.95); justify-content: flex-end; }
+
+            /* Message text wrapping */
+            .msg-text {
+                white-space: pre-line;
+                word-break: break-word;
+                line-height: 1.5;
+            }
+
+            /* Date separator between message groups */
+            .msg-date-sep {
+                text-align: center;
+                font-size: 0.72rem;
+                color: #94a3b8;
+                font-weight: 500;
                 margin: 0.5rem 0;
-                max-width: 150px;
-                border: 1px solid var(--gray-200);
-                animation: slideUp 0.3s ease-out;
+                position: relative;
+            }
+            .msg-date-sep::before,
+            .msg-date-sep::after {
+                content: '';
+                position: absolute;
+                top: 50%;
+                width: 28%;
+                height: 1px;
+                background: #e2e8f0;
+            }
+            .msg-date-sep::before { left: 0; }
+            .msg-date-sep::after  { right: 0; }
+
+            /* Message enter animation */
+            .message-bubble {
+                animation: msgFadeIn 0.2s ease-out;
+            }
+            @keyframes msgFadeIn {
+                from { opacity: 0; transform: translateY(6px); }
+                to   { opacity: 1; transform: translateY(0); }
             }
 
-            .typing-dots {
-                display: flex;
-                gap: 0.125rem;
-            }
-
-            .typing-dots span {
-                width: 4px;
-                height: 4px;
-                background: var(--gray-400);
+            /* Unread badge on WhatsApp floating button */
+            .chat-trigger { position: relative; }
+            .wa-unread-badge {
+                position: absolute;
+                top: -5px;
+                right: -5px;
+                background: #ef4444;
+                color: #fff;
                 border-radius: 50%;
-                animation: typing 1.4s infinite;
+                min-width: 20px;
+                height: 20px;
+                font-size: 0.68rem;
+                font-weight: 700;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0 4px;
+                border: 2px solid #fff;
+                pointer-events: none;
+                z-index: 10;
+                line-height: 1;
             }
-
-            .typing-dots span:nth-child(2) {
-                animation-delay: 0.2s;
+            @keyframes badgePop {
+                0%   { transform: scale(0.4); }
+                60%  { transform: scale(1.35); }
+                100% { transform: scale(1); }
             }
-
-            .typing-dots span:nth-child(3) {
-                animation-delay: 0.4s;
-            }
-
-            @keyframes typing {
-                0%, 60%, 100% {
-                    transform: translateY(0);
-                }
-                30% {
-                    transform: translateY(-6px);
-                }
-            }
+            .badge-pop { animation: badgePop 0.35s ease-out; }
         `;
         document.head.appendChild(style);
     </script>
