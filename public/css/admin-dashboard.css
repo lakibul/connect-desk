@@ -556,15 +556,13 @@ body {
 
 /* Messages Container */
 .messages-container {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 1.25rem;
     background: #f8f9fa;
     scroll-behavior: smooth;
-    display: block;
     min-height: 0;
-    max-height: 100%;
 }
 
 .messages-empty {
@@ -1190,6 +1188,69 @@ body {
     line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+}
+
+/* Quick FAQ Button (sidebar) */
+.quick-faq-btn {
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.45rem 1rem;
+    border-radius: 10px;
+    border: 1.5px dashed var(--whatsapp-color);
+    color: var(--whatsapp-color);
+    background: transparent;
+    transition: all 0.2s ease;
+}
+
+.quick-faq-btn:hover {
+    background: #f0fdf4;
+    border-style: solid;
+    color: #047857;
+}
+
+/* FAQ Preview Container */
+.faq-preview-container {
+    background: #f0fdf4;
+    border: 1.5px dashed #86efac;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    margin: 0 1.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.faq-preview-header {
+    display: flex;
+    align-items: center;
+    color: var(--whatsapp-color);
+    font-size: 0.9rem;
+    margin-bottom: 0.6rem;
+}
+
+.faq-preview-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    color: #374151;
+    padding: 0.5rem 0.25rem;
+}
+
+.faq-preview-items div {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+}
+
+.faq-num {
+    font-weight: 700;
+    color: var(--whatsapp-color);
+    min-width: 20px;
+}
+
+.faq-sandbox-note {
+    display: block;
+    margin-top: 0.6rem;
+    color: #6b7280;
+    font-size: 0.78rem;
 }
 
 /* Responsive adjustments */

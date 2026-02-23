@@ -26,6 +26,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/api/conversations', [AdminDashboardController::class, 'getConversations'])->name('api.conversations');
     Route::get('/api/conversations/{conversation}/messages', [AdminDashboardController::class, 'getMessages'])->name('api.messages');
     Route::post('/api/conversations/{conversation}/messages', [MessageController::class, 'sendAdminMessage'])->name('api.send');
+    Route::post('/api/conversations/{conversation}/send-faq', [MessageController::class, 'sendFaqMessage'])->name('api.faq.send');
     Route::post('/api/conversations/{conversation}/mark-read', [MessageController::class, 'markAsRead'])->name('api.mark-read');
     Route::post('/api/whatsapp/send', [MessageController::class, 'sendAdminWhatsApp'])->name('api.whatsapp.send');
     Route::post('/api/whatsapp/validate', [AdminDashboardController::class, 'validateWhatsAppNumber'])->name('api.whatsapp.validate');

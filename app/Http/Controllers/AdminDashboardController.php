@@ -89,7 +89,7 @@ class AdminDashboardController extends Controller
     {
         $request->validate([
             'phone_number' => 'required|string',
-            'message_type' => 'nullable|string|in:text,template',
+            'message_type' => 'nullable|string|in:text,template,faq',
             'initial_message' => 'nullable|string',
             'template_name' => 'nullable|string'
         ]);
@@ -171,6 +171,16 @@ class AdminDashboardController extends Controller
             );
             $sent = $result['success'] ?? false;
             $messageContent = $initialMessage;
+        } elseif ($messageType === 'faq') {
+            // Send FAQ menu (plain-text, works in Twilio Sandbox)
+            $result = $this->whatsappService->sendFaqMessage($formattedNumber, null, $admin);
+            $sent = $result['success'] ?? false;
+            $faqs = $this->whatsappService->getDefaultFaqs();
+            $messageContent  = "📋 *Frequently Asked Questions*\n━━━━━━━━━━━━━━━━━━━━\n\nReply with the *number* of your question:\n\n";
+            foreach ($faqs as $key => $item) {
+                $messageContent .= "*{$key}.* {$item['question']}\n";
+            }
+            $messageContent .= "\n━━━━━━━━━━━━━━━━━━━━\n_Type *FAQ* anytime to see this menu again._";
         }
 
         if ($sent) {

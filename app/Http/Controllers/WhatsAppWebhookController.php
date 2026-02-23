@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Services\TwilioWhatsAppService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -47,6 +48,26 @@ class WhatsAppWebhookController extends Controller
 
         Log::warning('Webhook verification failed - missing parameters');
         return response('Bad Request', 400);
+    }
+
+    /**
+     * Build the plain-text FAQ menu string (mirrors TwilioWhatsAppService::sendFaqMessage).
+     * Stored in DB so the admin sees what was auto-sent.
+     */
+    private function buildFaqMenuText(array $faqList): string
+    {
+        $message  = "📋 *Frequently Asked Questions*\n";
+        $message .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+        $message .= "Reply with the *number* of your question:\n\n";
+
+        foreach ($faqList as $key => $item) {
+            $message .= "*{$key}.* {$item['question']}\n";
+        }
+
+        $message .= "\n━━━━━━━━━━━━━━━━━━━━\n";
+        $message .= "_Type *FAQ* anytime to see this menu again._";
+
+        return $message;
     }
 
     /**
@@ -209,10 +230,48 @@ class WhatsAppWebhookController extends Controller
                 'is_read' => false,
             ]);
 
-            // Update conversation (save changes from above)
+            // Update conversation
             $conversation->last_message_at = now();
             $conversation->unread_count = $conversation->unread_count + 1;
             $conversation->save();
+
+            // ---------------------------------------------------------------
+            // FAQ Auto-Reply: Detect FAQ triggers ("faq", "help", "menu" …)
+            // or FAQ option numbers ("1", "2" … "5") and respond automatically.
+            // This works in Twilio Sandbox because replies are plain text.
+            // ---------------------------------------------------------------
+            $twilioService = new TwilioWhatsAppService();
+            $autoReplyText = null;
+
+            if ($twilioService->isFaqTrigger($messageBody)) {
+                // User typed a trigger keyword → send the full FAQ menu
+                $sendResult   = $twilioService->sendFaqMessage($senderPhoneWithPlus);
+                $autoReplyText = $this->buildFaqMenuText($twilioService->getDefaultFaqs());
+                Log::info('FAQ menu auto-sent', ['to' => $senderPhoneWithPlus, 'result' => $sendResult]);
+
+            } elseif ($twilioService->isFaqOption($messageBody)) {
+                // User typed a valid FAQ option number → send the answer
+                $answer = $twilioService->getFaqAnswer($messageBody);
+                if ($answer) {
+                    $sendResult   = $twilioService->sendMessage($answer, $senderPhoneWithPlus);
+                    $autoReplyText = $answer;
+                    Log::info('FAQ answer auto-sent', ['choice' => trim($messageBody), 'to' => $senderPhoneWithPlus]);
+                }
+            }
+
+            // Store the auto-reply in the database so the admin sees it in the chat
+            if ($autoReplyText) {
+                Message::create([
+                    'conversation_id' => $conversation->id,
+                    'message'         => $autoReplyText,
+                    'sender_type'     => 'admin',
+                    'platform'        => 'whatsapp',
+                    'is_read'         => true,
+                ]);
+
+                $conversation->last_message_at = now();
+                $conversation->save();
+            }
 
             // Twilio expects an XML response (TwiML)
             return response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200)

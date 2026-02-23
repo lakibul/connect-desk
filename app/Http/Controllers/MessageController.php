@@ -306,6 +306,63 @@ class MessageController extends Controller
         return null;
     }
 
+    /**
+     * Admin manually sends the FAQ menu to a conversation.
+     * Works in Twilio Sandbox (plain-text format).
+     */
+    public function sendFaqMessage(Request $request, Conversation $conversation)
+    {
+        if ($conversation->platform !== 'whatsapp') {
+            return response()->json([
+                'success' => false,
+                'message' => 'FAQ messages are only supported for WhatsApp conversations.',
+            ], 422);
+        }
+
+        $recipient = $this->resolveConversationPhone($conversation);
+        if (empty($recipient)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Recipient phone number is missing for this conversation.',
+            ], 422);
+        }
+
+        $admin  = $request->user();
+        $result = $this->whatsAppService->sendFaqMessage($recipient, null, $admin);
+
+        if (!($result['success'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send FAQ message. ' . ($result['error'] ?? 'Check Twilio credentials.'),
+            ], 502);
+        }
+
+        // Build the menu text for storage (same format the service sends)
+        $faqs        = $this->whatsAppService->getDefaultFaqs();
+        $menuText    = "📋 *Frequently Asked Questions*\n━━━━━━━━━━━━━━━━━━━━\n\nReply with the *number* of your question:\n\n";
+        foreach ($faqs as $key => $item) {
+            $menuText .= "*{$key}.* {$item['question']}\n";
+        }
+        $menuText .= "\n━━━━━━━━━━━━━━━━━━━━\n_Type *FAQ* anytime to see this menu again._";
+
+        $message = Message::create([
+            'conversation_id' => $conversation->id,
+            'user_id'         => $admin ? $admin->id : null,
+            'message'         => $menuText,
+            'sender_type'     => 'admin',
+            'platform'        => 'whatsapp',
+            'is_read'         => false,
+        ]);
+
+        $conversation->update(['last_message_at' => now()]);
+
+        return response()->json([
+            'success'      => true,
+            'message'      => $message,
+            'whatsapp_sent'=> true,
+        ]);
+    }
+
     public function markAsRead(Conversation $conversation)
     {
         $conversation->messages()

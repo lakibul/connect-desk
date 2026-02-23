@@ -13,44 +13,50 @@
 
     <!-- Custom CSS -->
     <link href="{{ asset('css/admin-dashboard.css') }}" rel="stylesheet">
+    <!-- App Config (injected from server) -->
+    <script>
+        const TWILIO_TARGET_PHONE = "{{ config('services.twilio.target_phone_number', '') }}";
+    </script>
     <style>
-        /* Keep chat composer pinned to the bottom of the visible chat pane */
-        .dashboard-container > .alert {
-            flex: 0 0 auto;
-        }
+        /* Alert banner takes its natural height, never stretches */
+        .dashboard-container > .alert { flex: 0 0 auto; }
 
+        /* Main row fills all remaining space below the navbar */
         .dashboard-container > .row.g-0.h-100 {
             flex: 1 1 auto;
             min-height: 0;
-            height: 0 !important;
+            height: 0 !important; /* Override Bootstrap h-100; flex handles the height */
         }
 
+        /* Chat area: flex column, fills the Bootstrap column via stretch */
         .chat-main {
             display: flex;
             flex-direction: column;
             min-height: 0;
-        }
-
-        .chat-interface {
-            display: grid;
-            grid-template-rows: auto minmax(0, 1fr) auto;
-            min-height: 0;
-            height: 100%;
             overflow: hidden;
         }
 
-        .messages-container {
+        /* Chat interface: grows to fill chat-main, 3-section flex column layout */
+        .chat-interface {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
             min-height: 0;
-            overflow-y: auto;
+            overflow: hidden;
         }
 
+        /* Messages area: expands to fill the middle section, scrolls when full */
+        .messages-container {
+            flex: 1 1 0;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* Input bar: always visible at the bottom, never shrinks or hides */
         .message-input-container {
-            position: sticky;
-            bottom: 0;
-            margin-top: auto;
-            z-index: 20;
-            background: #fff;
             flex-shrink: 0;
+            flex-grow: 0;
         }
     </style>
 </head>
@@ -115,10 +121,18 @@
                     </div>
 
                     <!-- New Conversation Button -->
-                    <div class="p-3">
+                    <div class="p-3 pb-1">
                         <button class="btn btn-success w-100 new-conversation-btn" id="newConversationBtn">
                             <i class="bi bi-plus-circle-fill me-2"></i>
                             Start New Conversation
+                        </button>
+                    </div>
+                    <!-- Quick FAQ Button -->
+                    <div class="px-3 pb-3">
+                        <button class="btn btn-outline-success w-100 quick-faq-btn" id="quickFaqBtn"
+                                title="Send FAQ menu to your configured target phone number">
+                            <i class="bi bi-question-circle me-2"></i>
+                            Send FAQ to Predefined Number
                         </button>
                     </div>
 
@@ -212,6 +226,7 @@
                             <select class="form-select form-select-sm" id="messageTypeSelect">
                                 <option value="text" selected>Text message</option>
                                 <option value="template">Template message</option>
+                                <option value="faq">📋 FAQ menu</option>
                             </select>
                             <div id="templateOptionsContainer" style="display: none; gap: 8px;" class="d-flex">
                                 <select class="form-select form-select-sm" id="templateSelector" style="flex: 1;">
@@ -227,6 +242,27 @@
                                 <input type="text" class="form-control form-control-sm" id="templateNameInput" placeholder="Enter Twilio Content SID (HXxxxxx)" style="display: none; flex: 1;">
                             </div>
                         </div>
+
+                        <!-- FAQ Preview (shown when FAQ menu type is selected) -->
+                        <div id="faqPreviewContainer" style="display: none;" class="faq-preview-container">
+                            <div class="faq-preview-header">
+                                <i class="bi bi-question-circle-fill me-2"></i>
+                                <strong>FAQ Menu</strong>
+                                <span class="ms-2 text-muted" style="font-size: 0.8rem;">— customer replies with a number to get the answer</span>
+                            </div>
+                            <div class="faq-preview-items">
+                                <div><span class="faq-num">1.</span> What are your business hours?</div>
+                                <div><span class="faq-num">2.</span> How can I track my order?</div>
+                                <div><span class="faq-num">3.</span> What is your return policy?</div>
+                                <div><span class="faq-num">4.</span> How do I contact support?</div>
+                                <div><span class="faq-num">5.</span> What payment methods do you accept?</div>
+                            </div>
+                            <small class="text-muted faq-sandbox-note">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Works in Twilio Sandbox &amp; Production (plain-text format)
+                            </small>
+                        </div>
+
                         <div class="message-input">
                             <button class="attachment-btn" title="Attach file">
                                 <i class="bi bi-paperclip"></i>
@@ -350,9 +386,10 @@
                             <select class="form-select" id="newMessageType">
                                 <option value="template" selected>Template Message (Recommended for new chats)</option>
                                 <option value="text">Text Message</option>
+                                <option value="faq">📋 FAQ Menu (Works in Sandbox)</option>
                             </select>
                             <small class="form-text text-muted">
-                                <i class="bi bi-info-circle"></i> WhatsApp requires a template message to start new conversations
+                                <i class="bi bi-info-circle"></i> WhatsApp requires a template message to start new conversations. FAQ works in Sandbox.
                             </small>
                         </div>
 
@@ -392,6 +429,28 @@
                             <small class="form-text text-muted">
                                 Note: Text messages only work if customer messaged you in last 24 hours
                             </small>
+                        </div>
+
+                        <!-- FAQ section shown when FAQ type is selected -->
+                        <div class="mb-3 d-none" id="faqStartSection">
+                            <div class="faq-preview-container">
+                                <div class="faq-preview-header">
+                                    <i class="bi bi-question-circle-fill me-2"></i>
+                                    <strong>FAQ Menu</strong>
+                                    <span class="ms-2 text-muted" style="font-size:0.8rem;">— will be sent as first message</span>
+                                </div>
+                                <div class="faq-preview-items">
+                                    <div><span class="faq-num">1.</span> What are your business hours?</div>
+                                    <div><span class="faq-num">2.</span> How can I track my order?</div>
+                                    <div><span class="faq-num">3.</span> What is your return policy?</div>
+                                    <div><span class="faq-num">4.</span> How do I contact support?</div>
+                                    <div><span class="faq-num">5.</span> What payment methods do you accept?</div>
+                                </div>
+                                <small class="faq-sandbox-note">
+                                    <i class="bi bi-check-circle text-success me-1"></i>
+                                    Works in Twilio Sandbox. Customer replies <strong>1–5</strong> to get the answer automatically.
+                                </small>
+                            </div>
                         </div>
 
                         <div class="d-grid gap-2">
@@ -463,6 +522,17 @@
                 });
                 document.getElementById('newConversationBtn').addEventListener('click', () => {
                     this.clearNewWhatsAppForm();
+                    this.modal.show();
+                });
+
+                // Quick FAQ: pre-fill modal with predefined phone number and FAQ type
+                document.getElementById('quickFaqBtn').addEventListener('click', () => {
+                    this.clearNewWhatsAppForm();
+                    if (TWILIO_TARGET_PHONE) {
+                        document.getElementById('newWhatsAppNumber').value = TWILIO_TARGET_PHONE;
+                    }
+                    document.getElementById('newMessageType').value = 'faq';
+                    this.toggleNewMessageType();
                     this.modal.show();
                 });
                 document.getElementById('newMessageType').addEventListener('change', () => this.toggleNewMessageType());
@@ -633,7 +703,7 @@
                 this.updatePlatformIndicator(conversation.platform);
 
                 document.getElementById('emptyChatState').style.display = 'none';
-                document.querySelector('.chat-interface').style.display = 'grid';
+                document.querySelector('.chat-interface').style.display = 'flex';
                 this.setComposeEnabled(true);
 
                 await this.loadConversationMessages(conversation.id);
@@ -729,7 +799,7 @@
                     messageGroup.innerHTML = `
                         <div class="message ${isAdmin ? 'sent' : 'received'}">
                             <div class="message-content">
-                                <p>${this.escapeHtml(messageText)}</p>
+                                <p>${this.formatMessageText(messageText)}</p>
                                 <span class="message-time">${this.formatMessageTime(message.created_at)}</span>
                             </div>
                         </div>
@@ -747,6 +817,35 @@
 
                 const messageType = document.getElementById('messageTypeSelect').value;
                 const input = document.getElementById('messageInput');
+
+                // --- FAQ: send to dedicated endpoint ---
+                if (messageType === 'faq') {
+                    const sendBtn = document.getElementById('sendBtn');
+                    sendBtn.disabled = true;
+                    try {
+                        const response = await fetch(`/admin/api/conversations/${this.currentConversationId}/send-faq`, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': this.csrfToken
+                            },
+                            body: JSON.stringify({})
+                        });
+                        const data = await response.json();
+                        if (!response.ok || !data.success) {
+                            throw new Error(data.message || 'Failed to send FAQ.');
+                        }
+                        await this.loadConversations(this.currentConversationId);
+                    } catch (error) {
+                        alert(error.message);
+                    } finally {
+                        sendBtn.disabled = false;
+                    }
+                    return;
+                }
+
+                // --- Template or Text ---
                 const message = input.value.trim();
                 const payload = { message_type: messageType };
 
@@ -999,6 +1098,7 @@
                 if (messageType === 'text' && !textMessage) {
                     return this.showNewWhatsAppError('Message is required for text type.');
                 }
+                // FAQ type needs no additional input — the menu is predefined
 
                 // Disable button and show spinner
                 submitBtn.disabled = true;
@@ -1020,13 +1120,14 @@
 
                         if (messageType === 'template') {
                             payload.template_name = templateName;
-                        } else {
+                        } else if (messageType === 'text') {
                             payload.initial_message = textMessage;
                         }
+                        // faq: no extra payload needed
 
                         const startData = await this.startWhatsAppConversation(payload);
 
-                        const msgType = messageType === 'template' ? 'Template' : 'Message';
+                        const msgType = messageType === 'template' ? 'Template' : messageType === 'faq' ? 'FAQ Menu' : 'Message';
                         successBox.textContent = `${msgType} sent successfully! ${startData.conversation_existed ? 'Using existing conversation.' : 'Conversation started.'}`;
                         btnText.textContent = 'Success!';
 
@@ -1059,9 +1160,10 @@
 
                             if (messageType === 'template') {
                                 payload.template_name = templateName;
-                            } else {
+                            } else if (messageType === 'text') {
                                 payload.initial_message = textMessage;
                             }
+                            // faq: no extra payload needed
 
                             const startData = await this.startWhatsAppConversation(payload);
                             sentCount += 1;
@@ -1139,15 +1241,15 @@
             toggleNewMessageType() {
                 const messageType = document.getElementById('newMessageType').value;
                 const templateSection = document.getElementById('templateSection');
-                const textSection = document.getElementById('textMessageSection');
+                const textSection     = document.getElementById('textMessageSection');
+                const faqSection      = document.getElementById('faqStartSection');
+
+                templateSection.classList.toggle('d-none', messageType !== 'template');
+                textSection.classList.toggle('d-none',     messageType !== 'text');
+                if (faqSection) faqSection.classList.toggle('d-none', messageType !== 'faq');
 
                 if (messageType === 'template') {
-                    templateSection.classList.remove('d-none');
-                    textSection.classList.add('d-none');
                     this.handleNewTemplateSelection();
-                } else {
-                    templateSection.classList.add('d-none');
-                    textSection.classList.remove('d-none');
                 }
             }
 
@@ -1201,7 +1303,13 @@
             toggleMessageType() {
                 const messageType = document.getElementById('messageTypeSelect').value;
                 const templateContainer = document.getElementById('templateOptionsContainer');
+                const faqPreview        = document.getElementById('faqPreviewContainer');
+                const textWrapper       = document.querySelector('.text-input-wrapper');
+
                 templateContainer.style.display = messageType === 'template' ? 'flex' : 'none';
+                faqPreview.style.display         = messageType === 'faq'      ? 'block' : 'none';
+                if (textWrapper) textWrapper.style.display = messageType === 'faq' ? 'none' : '';
+
                 if (messageType === 'template') {
                     document.getElementById('templateSelector').value = 'hello_world';
                     this.handleTemplateSelection();
@@ -1248,6 +1356,8 @@
                 document.getElementById('sendBtn').disabled = !enabled;
                 document.getElementById('messageTypeSelect').disabled = !enabled;
                 document.getElementById('templateNameInput').disabled = !enabled;
+                // Re-apply FAQ preview visibility when compose state changes
+                if (enabled) this.toggleMessageType();
             }
 
             showEmptyState() {
@@ -1323,6 +1433,20 @@
                     return value;
                 }
                 return value.replace(' ', 'T');
+            }
+
+            /**
+             * Format message text for display in the chatbox.
+             * - Escapes HTML (XSS safe)
+             * - Converts \n to <br> (line breaks)
+             * - Renders *bold* and _italic_ WhatsApp formatting
+             * - Renders ━ separator lines
+             */
+            formatMessageText(text) {
+                return this.escapeHtml(text)
+                    .replace(/\n/g, '<br>')
+                    .replace(/\*([^*<]+)\*/g, '<strong>$1</strong>')
+                    .replace(/_([^_<]+)_/g, '<em>$1</em>');
             }
 
             escapeHtml(value) {

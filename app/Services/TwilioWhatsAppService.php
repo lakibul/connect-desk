@@ -453,4 +453,117 @@ class TwilioWhatsAppService
     {
         return $this->sanitizePhoneNumber($number);
     }
+
+    // ---------------------------------------------------------------
+    // FAQ / Interactive Message Methods
+    // ---------------------------------------------------------------
+
+    /**
+     * Get the default FAQ list.
+     * Each key is the number the user types to select it.
+     *
+     * @return array
+     */
+    public function getDefaultFaqs(): array
+    {
+        return [
+            '1' => [
+                'question' => 'What are your business hours?',
+                'answer'   => "🕐 *Business Hours:*\n\nMonday - Friday: 9:00 AM - 6:00 PM\nSaturday: 10:00 AM - 4:00 PM\nSunday: Closed\n\n_Reply *FAQ* anytime to see all questions._",
+            ],
+            '2' => [
+                'question' => 'How can I track my order?',
+                'answer'   => "📦 *Order Tracking:*\n\nYou can track your order:\n• Check the confirmation email sent to you\n• Visit our website and enter your Order ID\n• Reply here with your Order ID for direct help\n\n_Reply *FAQ* anytime to see all questions._",
+            ],
+            '3' => [
+                'question' => 'What is your return policy?',
+                'answer'   => "🔄 *Return Policy:*\n\n• Returns accepted within *30 days* of purchase\n• Item must be in original, unused condition\n• Contact us to initiate a return request\n• Refund processed within 5-7 business days\n\n_Reply *FAQ* anytime to see all questions._",
+            ],
+            '4' => [
+                'question' => 'How do I contact support?',
+                'answer'   => "💬 *Contact Support:*\n\n• *Chat:* Reply directly to this message\n• *Email:* support@connectdesk.com\n• *Website:* Live chat available\n\nOur team responds within *2 hours* during business hours. 🌟\n\n_Reply *FAQ* anytime to see all questions._",
+            ],
+            '5' => [
+                'question' => 'What payment methods do you accept?',
+                'answer'   => "💳 *Payment Methods:*\n\nWe accept:\n• Credit/Debit Cards (Visa, Mastercard)\n• Mobile Banking (bKash, Nagad, Rocket)\n• Bank Transfer\n• Cash on Delivery (selected areas)\n\nAll transactions are *secure & encrypted* 🔒\n\n_Reply *FAQ* anytime to see all questions._",
+            ],
+        ];
+    }
+
+    /**
+     * Send a formatted FAQ menu message to a WhatsApp number.
+     * Works in Twilio Sandbox (plain text format).
+     *
+     * @param string    $recipientPhone
+     * @param array|null $faqs  Custom FAQ list (optional, uses default if null)
+     * @param User|null  $user  Admin user for per-user Twilio credentials
+     * @return array
+     */
+    public function sendFaqMessage(string $recipientPhone, array $faqs = null, ?User $user = null): array
+    {
+        $faqList = $faqs ?? $this->getDefaultFaqs();
+
+        $message  = "📋 *Frequently Asked Questions*\n";
+        $message .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+        $message .= "Reply with the *number* of your question:\n\n";
+
+        foreach ($faqList as $key => $item) {
+            $message .= "*{$key}.* {$item['question']}\n";
+        }
+
+        $message .= "\n━━━━━━━━━━━━━━━━━━━━\n";
+        $message .= "_Type *FAQ* anytime to see this menu again._";
+
+        if ($user) {
+            return $this->sendMessageForUser($user, $message, $recipientPhone);
+        }
+
+        return $this->sendMessage($message, $recipientPhone);
+    }
+
+    /**
+     * Get the FAQ answer for a given user reply number.
+     *
+     * @param string     $userReply  The message the user typed (e.g. "1", "2")
+     * @param array|null $faqs       Custom FAQ list (optional)
+     * @return string|null           Formatted answer, or null if not a valid choice
+     */
+    public function getFaqAnswer(string $userReply, array $faqs = null): ?string
+    {
+        $faqList = $faqs ?? $this->getDefaultFaqs();
+        $choice  = trim($userReply);
+
+        if (isset($faqList[$choice])) {
+            $item = $faqList[$choice];
+            return "✅ *{$item['question']}*\n\n{$item['answer']}";
+        }
+
+        return null;
+    }
+
+    /**
+     * Check whether an incoming message is a FAQ trigger keyword.
+     * Sending "faq", "help", "menu" etc. will trigger the FAQ menu.
+     *
+     * @param string $message
+     * @return bool
+     */
+    public function isFaqTrigger(string $message): bool
+    {
+        $triggers = ['faq', 'help', 'menu', 'start', '?'];
+        return in_array(strtolower(trim($message)), $triggers);
+    }
+
+    /**
+     * Check whether an incoming message is a valid FAQ option number.
+     *
+     * @param string     $message
+     * @param array|null $faqs
+     * @return bool
+     */
+    public function isFaqOption(string $message, array $faqs = null): bool
+    {
+        $faqList = $faqs ?? $this->getDefaultFaqs();
+        return isset($faqList[trim($message)]);
+    }
 }
